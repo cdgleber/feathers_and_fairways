@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -20,24 +18,24 @@ services:
     networks:
       - feathers_and_fairways-network
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: feathers_and_fairways-app
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/feathers_and_fairways
-      RUST_LOG: info,tower_http=debug
-      HOST: 0.0.0.0
-      PORT: 3000
-    ports:
-      - "3000:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - feathers_and_fairways-network
-    restart: unless-stopped
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: feathers_and_fairways-app
+  #   environment:
+  #     DATABASE_URL: postgres://postgres:postgres@postgres:5432/feathers_and_fairways
+  #     RUST_LOG: info,tower_http=debug
+  #     HOST: 0.0.0.0
+  #     PORT: 3000
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - feathers_and_fairways-network
+  #   restart: unless-stopped
 
 volumes:
   postgres_data:

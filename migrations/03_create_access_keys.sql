@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS access_keys (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_access_keys_season ON access_keys(season_id);
-CREATE INDEX idx_access_keys_code ON access_keys(key_code);
+CREATE INDEX IF NOT EXISTS idx_access_keys_season ON access_keys(season_id);
+CREATE INDEX IF NOT EXISTS idx_access_keys_code ON access_keys(key_code);

@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS seasons (
     UNIQUE(year)
 );
 
-CREATE INDEX idx_seasons_active ON seasons(is_active);
+CREATE INDEX IF NOT EXISTS idx_seasons_active ON seasons(is_active);

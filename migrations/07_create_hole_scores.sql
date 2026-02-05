@@ -11,9 +11,9 @@ CREATE TABLE IF NOT EXISTS hole_scores (
     UNIQUE(tournament_id, golfer_id, day, hole)
 );
 
-CREATE INDEX idx_hole_scores_tournament ON hole_scores(tournament_id);
-CREATE INDEX idx_hole_scores_golfer ON hole_scores(golfer_id);
-CREATE INDEX idx_hole_scores_day ON hole_scores(day);
+CREATE INDEX IF NOT EXISTS idx_hole_scores_tournament ON hole_scores(tournament_id);
+CREATE INDEX IF NOT EXISTS idx_hole_scores_golfer ON hole_scores(golfer_id);
+CREATE INDEX IF NOT EXISTS idx_hole_scores_day ON hole_scores(day);
 
 -- Function to calculate fantasy points based on score to par
 CREATE OR REPLACE FUNCTION calculate_fantasy_points(par_score INTEGER)
@@ -36,6 +36,8 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS auto_calculate_fantasy_points ON hole_scores;
 
 CREATE TRIGGER auto_calculate_fantasy_points
     BEFORE INSERT OR UPDATE ON hole_scores

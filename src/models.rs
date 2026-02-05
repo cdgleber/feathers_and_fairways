@@ -12,7 +12,7 @@ pub struct Season {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub is_active: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -30,7 +30,7 @@ pub struct Golfer {
     pub name: String,
     pub win_probability_group: i32,
     pub is_active: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -49,7 +49,7 @@ pub struct AccessKey {
     pub player_name: Option<String>,
     pub is_used: bool,
     pub used_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,7 +76,7 @@ pub struct Team {
     pub season_id: Uuid,
     pub player_name: String,
     pub access_key_id: Uuid,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -103,7 +103,7 @@ pub struct Tournament {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub is_active: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -125,7 +125,7 @@ pub struct HoleScore {
     pub strokes: i32,
     pub score_to_par: i32,
     pub fantasy_points: i32,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -147,18 +147,20 @@ pub struct AddHoleScoresRequest {
     pub scores: Vec<HoleScoreInput>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, Validate)]
 pub struct LeaderboardEntry {
     pub player_name: String,
     pub team_id: Uuid,
-    pub total_points: i64,
+    #[validate(range(min = 0))]
+    pub total_points: Option<i64>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, Validate)]
 pub struct TournamentScore {
     pub golfer_name: String,
     pub golfer_id: Uuid,
-    pub total_points: i64,
+    #[validate(range(min = 0))]
+    pub total_points: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]

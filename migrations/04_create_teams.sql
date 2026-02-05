@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS teams (
     UNIQUE(season_id, player_name)
 );
 
-CREATE INDEX idx_teams_season ON teams(season_id);
-CREATE INDEX idx_teams_player ON teams(player_name);
+CREATE INDEX IF NOT EXISTS idx_teams_season ON teams(season_id);
+CREATE INDEX IF NOT EXISTS idx_teams_player ON teams(player_name);

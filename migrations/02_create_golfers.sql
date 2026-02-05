@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS golfers (
     UNIQUE(name)
 );
 
-CREATE INDEX idx_golfers_group ON golfers(win_probability_group);
-CREATE INDEX idx_golfers_active ON golfers(is_active);
+CREATE INDEX IF NOT EXISTS idx_golfers_group ON golfers(win_probability_group);
+CREATE INDEX IF NOT EXISTS idx_golfers_active ON golfers(is_active);

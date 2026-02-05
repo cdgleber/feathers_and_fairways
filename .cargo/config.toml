@@ -1,0 +1,3 @@
+[env]
+# Uncomment to enable offline mode (doesn't require database during compilation)
+SQLX_OFFLINE = "true cargo test"

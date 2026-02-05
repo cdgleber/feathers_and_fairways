@@ -448,7 +448,7 @@ pub async fn get_season_leaderboard(
         SELECT 
             t.player_name,
             t.id as team_id,
-            COALESCE(SUM(hs.fantasy_points), 0) as "total_points!"
+            COALESCE(SUM(hs.fantasy_points), 0) as "total_points"
         FROM teams t
         LEFT JOIN team_golfers tg ON t.id = tg.team_id
         LEFT JOIN hole_scores hs ON tg.golfer_id = hs.golfer_id
@@ -476,7 +476,7 @@ pub async fn get_tournament_leaderboard(
         SELECT 
             g.name as golfer_name,
             g.id as golfer_id,
-            COALESCE(SUM(hs.fantasy_points), 0) as "total_points!"
+            COALESCE(SUM(hs.fantasy_points), 0) as "total_points"
         FROM golfers g
         LEFT JOIN hole_scores hs ON g.id = hs.golfer_id AND hs.tournament_id = $1
         GROUP BY g.id, g.name

@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS tournaments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_tournaments_season ON tournaments(season_id);
-CREATE INDEX idx_tournaments_active ON tournaments(is_active);
+CREATE INDEX IF NOT EXISTS idx_tournaments_season ON tournaments(season_id);
+CREATE INDEX IF NOT EXISTS idx_tournaments_active ON tournaments(is_active);

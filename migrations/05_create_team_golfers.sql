@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS team_golfers (
     UNIQUE(team_id, golfer_id)
 );
 
-CREATE INDEX idx_team_golfers_team ON team_golfers(team_id);
-CREATE INDEX idx_team_golfers_golfer ON team_golfers(golfer_id);
+CREATE INDEX IF NOT EXISTS idx_team_golfers_team ON team_golfers(team_id);
+CREATE INDEX IF NOT EXISTS idx_team_golfers_golfer ON team_golfers(golfer_id);
 
 -- Ensure each team has exactly 6 golfers
 CREATE OR REPLACE FUNCTION check_team_golfer_count()
@@ -20,6 +20,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS enforce_team_golfer_limit ON team_golfers;
 CREATE TRIGGER enforce_team_golfer_limit
     BEFORE INSERT ON team_golfers
     FOR EACH ROW

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: feathers_and_fairways-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: feathers_and_fairways
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - feathers_and_fairways-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: feathers_and_fairways-app
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/feathers_and_fairways
+      RUST_LOG: info,tower_http=debug
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - feathers_and_fairways-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  feathers_and_fairways-network:
+    driver: bridge

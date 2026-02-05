@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feathers & Fairways</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container header-content">
+            <div class="logo">
+                <span class="material-icons">golf_course</span>
+                <h1>Feathers & Fairways</h1>
+            </div>
+            <nav class="nav" id="mainNav">
+                <button class="nav-btn" data-view="home">
+                    <span class="material-icons">home</span>
+                    <span>Home</span>
+                </button>
+                <button class="nav-btn" data-view="join">
+                    <span class="material-icons">person_add</span>
+                    <span>Join League</span>
+                </button>
+                <button class="nav-btn" data-view="leaderboard">
+                    <span class="material-icons">leaderboard</span>
+                    <span>Leaderboard</span>
+                </button>
+                <button class="nav-btn" data-view="admin" id="adminBtn">
+                    <span class="material-icons">admin_panel_settings</span>
+                    <span>Admin</span>
+                </button>
+            </nav>
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <span class="material-icons">menu</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile Navigation -->
+    <div class="mobile-nav" id="mobileNav">
+        <button class="mobile-nav-btn" data-view="home">
+            <span class="material-icons">home</span>
+            <span>Home</span>
+        </button>
+        <button class="mobile-nav-btn" data-view="join">
+            <span class="material-icons">person_add</span>
+            <span>Join League</span>
+        </button>
+        <button class="mobile-nav-btn" data-view="leaderboard">
+            <span class="material-icons">leaderboard</span>
+            <span>Leaderboard</span>
+        </button>
+        <button class="mobile-nav-btn" data-view="admin">
+            <span class="material-icons">admin_panel_settings</span>
+            <span>Admin</span>
+        </button>
+    </div>
+
+    <main class="main">
+        <div class="container">
+            <!-- Home View -->
+            <div id="homeView" class="view active">
+                <div class="hero">
+                    <h2 class="hero-title">Welcome to Feathers & Fairways</h2>
+                    <p class="hero-subtitle">Build your dream team and compete for glory</p>
+                </div>
+
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <span class="material-icons stat-icon">groups</span>
+                        <h3 class="stat-value" id="totalTeams">0</h3>
+                        <p class="stat-label">Teams</p>
+                    </div>
+                    <div class="stat-card">
+                        <span class="material-icons stat-icon">sports_golf</span>
+                        <h3 class="stat-value" id="totalGolfers">0</h3>
+                        <p class="stat-label">Golfers</p>
+                    </div>
+                    <div class="stat-card">
+                        <span class="material-icons stat-icon">emoji_events</span>
+                        <h3 class="stat-value" id="activeTournaments">0</h3>
+                        <p class="stat-label">Active Tournaments</p>
+                    </div>
+                </div>
+
+                <div class="content-section">
+                    <h3 class="section-title">Current Season</h3>
+                    <div id="currentSeasonInfo" class="info-card">
+                        <p class="loading">Loading season information...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Join League View -->
+            <div id="joinView" class="view">
+                <h2 class="page-title">Join the League</h2>
+                
+                <div class="card">
+                    <h3 class="card-title">Enter Your Access Key</h3>
+                    <form id="validateKeyForm" class="form">
+                        <div class="form-group">
+                            <label for="accessKey" class="form-label">Access Key</label>
+                            <input 
+                                type="text" 
+                                id="accessKey" 
+                                class="form-input" 
+                                placeholder="XXXX-XXXX-XXXX"
+                                maxlength="14"
+                                required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="material-icons">check_circle</span>
+                            Validate Key
+                        </button>
+                    </form>
+                </div>
+
+                <div id="teamBuilderSection" class="card hidden">
+                    <h3 class="card-title">Build Your Team</h3>
+                    <form id="createTeamForm" class="form">
+                        <div class="form-group">
+                            <label for="playerName" class="form-label">Your Name</label>
+                            <input 
+                                type="text" 
+                                id="playerName" 
+                                class="form-input" 
+                                placeholder="Enter your name"
+                                required>
+                        </div>
+
+                        <div class="selection-info">
+                            <p><strong>Select 6 golfers - one from each skill group</strong></p>
+                            <div id="selectionStatus" class="selection-status"></div>
+                        </div>
+
+                        <div id="golferGroups" class="golfer-groups"></div>
+
+                        <button type="submit" class="btn btn-primary" id="createTeamBtn" disabled>
+                            <span class="material-icons">add_circle</span>
+                            Create Team
+                        </button>
+                    </form>
+                </div>
+
+                <div id="teamCreatedSection" class="card hidden success-card">
+                    <div class="success-icon">
+                        <span class="material-icons">check_circle</span>
+                    </div>
+                    <h3>Team Created Successfully!</h3>
+                    <p id="teamCreatedMessage"></p>
+                    <button class="btn btn-primary" onclick="app.showView('leaderboard')">
+                        View Leaderboard
+                    </button>
+                </div>
+            </div>
+
+            <!-- Leaderboard View -->
+            <div id="leaderboardView" class="view">
+                <h2 class="page-title">Leaderboard</h2>
+                
+                <div class="tabs">
+                    <button class="tab active" data-tab="season">Season Standings</button>
+                    <button class="tab" data-tab="tournament">Tournament Scores</button>
+                </div>
+
+                <div class="tab-content">
+                    <div id="seasonTab" class="tab-pane active">
+                        <div class="card">
+                            <div id="seasonLeaderboard" class="leaderboard"></div>
+                        </div>
+                    </div>
+
+                    <div id="tournamentTab" class="tab-pane">
+                        <div class="form-group">
+                            <label for="tournamentSelect" class="form-label">Select Tournament</label>
+                            <select id="tournamentSelect" class="form-input"></select>
+                        </div>
+                        <div class="card">
+                            <div id="tournamentLeaderboard" class="leaderboard"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin View -->
+            <div id="adminView" class="view">
+                <h2 class="page-title">Admin Panel</h2>
+                
+                <div class="admin-grid">
+                    <!-- Season Management -->
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">calendar_today</span>
+                            Season Management
+                        </h3>
+                        <form id="createSeasonForm" class="form">
+                            <div class="form-group">
+                                <label for="seasonName" class="form-label">Season Name</label>
+                                <input type="text" id="seasonName" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="seasonYear" class="form-label">Year</label>
+                                <input type="number" id="seasonYear" class="form-input" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="seasonStart" class="form-label">Start Date</label>
+                                    <input type="date" id="seasonStart" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="seasonEnd" class="form-label">End Date</label>
+                                    <input type="date" id="seasonEnd" class="form-input" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Season</button>
+                        </form>
+                    </div>
+
+                    <!-- Access Keys -->
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">vpn_key</span>
+                            Generate Access Keys
+                        </h3>
+                        <form id="generateKeysForm" class="form">
+                            <div class="form-group">
+                                <label for="keyCount" class="form-label">Number of Keys</label>
+                                <input type="number" id="keyCount" class="form-input" min="1" max="50" value="10" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Generate Keys</button>
+                        </form>
+                        <div id="generatedKeys" class="generated-keys"></div>
+                    </div>
+
+                    <!-- Golfer Management -->
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">sports_golf</span>
+                            Add Golfer
+                        </h3>
+                        <form id="addGolferForm" class="form">
+                            <div class="form-group">
+                                <label for="golferName" class="form-label">Golfer Name</label>
+                                <input type="text" id="golferName" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="winGroup" class="form-label">Win Probability Group (1-6)</label>
+                                <select id="winGroup" class="form-input" required>
+                                    <option value="1">Group 1 (Highest)</option>
+                                    <option value="2">Group 2</option>
+                                    <option value="3">Group 3</option>
+                                    <option value="4">Group 4</option>
+                                    <option value="5">Group 5</option>
+                                    <option value="6">Group 6 (Lowest)</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Golfer</button>
+                        </form>
+                    </div>
+
+                    <!-- Tournament Management -->
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">emoji_events</span>
+                            Create Tournament
+                        </h3>
+                        <form id="createTournamentForm" class="form">
+                            <div class="form-group">
+                                <label for="tournamentName" class="form-label">Tournament Name</label>
+                                <input type="text" id="tournamentName" class="form-input" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="tournamentStart" class="form-label">Start Date</label>
+                                    <input type="date" id="tournamentStart" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="tournamentEnd" class="form-label">End Date</label>
+                                    <input type="date" id="tournamentEnd" class="form-input" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Tournament</button>
+                        </form>
+                    </div>
+
+                    <!-- Score Entry -->
+                    <div class="card full-width">
+                        <h3 class="card-title">
+                            <span class="material-icons">score</span>
+                            Enter Scores
+                        </h3>
+                        <div id="scoreEntrySection"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ use validator::Validate;
 
 use crate::models::*;
 use crate::db::generate_access_key;
+use crate::auth::*;
 
 // Season routes
 pub async fn create_season(
@@ -238,11 +239,12 @@ pub async fn create_team(
     let team = sqlx::query_as!(
         Team,
         r#"
-        INSERT INTO teams (season_id, player_name, access_key_id)
-        VALUES ($1, $2, $3)
-        RETURNING id, season_id, player_name, access_key_id, created_at
+        INSERT INTO teams (season_id, tournament_id, player_name, access_key_id)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, season_id, tournament_id, player_name, access_key_id, created_at
         "#,
         access_key.season_id,
+        payload.tournament_id,
         payload.player_name,
         access_key.id
     )
@@ -300,7 +302,7 @@ pub async fn list_teams(
 ) -> Result<Json<Vec<Team>>, (StatusCode, Json<ApiError>)> {
     let teams = sqlx::query_as!(
         Team,
-        "SELECT id, season_id, player_name, access_key_id, created_at FROM teams WHERE season_id = $1 ORDER BY player_name",
+        "SELECT id, season_id, tournament_id, player_name, access_key_id, created_at FROM teams WHERE season_id = $1 ORDER BY player_name",
         season_id
     )
     .fetch_all(&pool)
@@ -490,4 +492,156 @@ pub async fn get_tournament_leaderboard(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     Ok(Json(leaderboard))
+}
+
+
+// Admin authentication
+pub async fn admin_login(
+    Json(payload): Json<AdminLoginRequest>,
+) -> Result<Json<AdminLoginResponse>, (StatusCode, Json<ApiError>)> {
+    tracing::info!("AUTH ROUTED");
+    tracing::info!("PAYLOAD: {payload:?}");
+    if verify_admin_password(&payload.password) {
+        Ok(Json(AdminLoginResponse {
+            success: true,
+            token: Some(generate_admin_token()),
+        }))
+    } else {
+        Ok(Json(AdminLoginResponse {
+            success: false,
+            token: None,
+        }))
+    }
+}
+
+// Update team (before tournament starts)
+pub async fn update_team(
+    State(pool): State<PgPool>,
+    Json(payload): Json<UpdateTeamRequest>,
+) -> Result<Json<TeamWithGolfers>, (StatusCode, Json<ApiError>)> {
+    payload.validate()
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
+
+    // Validate access key
+    let access_key = sqlx::query_as!(
+        AccessKey,
+        "SELECT id, key_code, season_id, player_name, is_used, used_at, created_at FROM access_keys WHERE key_code = $1",
+        payload.key_code
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Invalid access key"))))?;
+
+    if !access_key.is_used {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("Access key has not been used yet. Create a team first.")),
+        ));
+    }
+
+    // Check if tournament has started
+    let tournament = sqlx::query!(
+        "SELECT start_date FROM tournaments WHERE id = $1",
+        payload.tournament_id
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+
+    let now = chrono::Utc::now().date_naive();
+    if tournament.start_date <= now {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("Cannot edit team after tournament has started")),
+        ));
+    }
+
+    // Find existing team
+    let team = sqlx::query_as!(
+        Team,
+        "SELECT id, season_id, tournament_id, player_name, access_key_id, created_at FROM teams WHERE access_key_id = $1 AND tournament_id = $2",
+        access_key.id,
+        payload.tournament_id
+    )
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Team not found for this tournament"))))?;
+
+    // Verify golfer selection (one from each group)
+    let mut groups_used = std::collections::HashSet::new();
+    
+    for golfer_id in &payload.golfer_ids {
+        let golfer = sqlx::query_as!(
+            Golfer,
+            "SELECT id, name, win_probability_group, is_active, created_at FROM golfers WHERE id = $1",
+            golfer_id
+        )
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+        .ok_or((StatusCode::BAD_REQUEST, Json(ApiError::new("Invalid golfer ID"))))?;
+
+        if !groups_used.insert(golfer.win_probability_group) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new("Cannot select multiple golfers from the same group")),
+            ));
+        }
+    }
+
+    if groups_used.len() != 6 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("Must select exactly one golfer from each of the 6 groups")),
+        ));
+    }
+
+    // Start transaction
+    let mut tx = pool.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Remove old golfer selections
+    sqlx::query!(
+        "DELETE FROM team_golfers WHERE team_id = $1",
+        team.id
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Add new golfer selections
+    for golfer_id in &payload.golfer_ids {
+        sqlx::query!(
+            "INSERT INTO team_golfers (team_id, golfer_id) VALUES ($1, $2)",
+            team.id,
+            golfer_id
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+    }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Fetch updated team golfers
+    let golfers = sqlx::query_as!(
+        Golfer,
+        r#"
+        SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at
+        FROM golfers g
+        INNER JOIN team_golfers tg ON g.id = tg.golfer_id
+        WHERE tg.team_id = $1
+        ORDER BY g.win_probability_group
+        "#,
+        team.id
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(TeamWithGolfers { team, golfers }))
 }

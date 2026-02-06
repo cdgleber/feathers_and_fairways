@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feathers & Fairways</title>
+    <title>Feathers and Fairways</title>
     <link rel="stylesheet" href="/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,6 +34,9 @@
                 <button class="nav-btn" data-view="admin" id="adminBtn">
                     <span class="material-icons">admin_panel_settings</span>
                     <span>Admin</span>
+                </button>
+                <button class="nav-btn" id="darkModeToggle" title="Toggle dark mode">
+                    <span class="material-icons">dark_mode</span>
                 </button>
             </nav>
             <button class="mobile-menu-btn" id="mobileMenuBtn">
@@ -122,33 +125,19 @@
                 </div>
 
                 <div id="teamBuilderSection" class="card hidden">
-                    <h3 class="card-title">Build Your Team</h3>
-                    <form id="createTeamForm" class="form">
-                        <div class="form-group">
-                            <label for="playerName" class="form-label">Your Name</label>
-                            <input 
-                                type="text" 
-                                id="playerName" 
-                                class="form-input" 
-                                placeholder="Enter your name"
-                                required>
-                        </div>
-
-                        <div class="selection-info">
-                            <p><strong>Select 6 golfers - one from each skill group</strong></p>
-                            <div id="selectionStatus" class="selection-status"></div>
-                        </div>
-
-                        <div id="golferGroups" class="golfer-groups"></div>
-
-                        <button type="submit" class="btn btn-primary" id="createTeamBtn" disabled>
-                            <span class="material-icons">add_circle</span>
-                            Create Team
-                        </button>
-                    </form>
+                    <!-- Content will be dynamically loaded here -->
                 </div>
 
-                <div id="teamCreatedSection" class="card hidden success-card">
+                <!-- <div id="teamCreatedSection" class="card hidden success-card">
+                    <div class="success-icon">
+                        <span class="material-icons">check_circle</span>
+                    </div>
+                    <h3>Team Saved Successfully!</h3>
+                    <p id="teamCreatedMessage"></p>
+                    <button class="btn btn-primary" onclick="app.showView('leaderboard')">
+                        View Leaderboard
+                    </button>
+                </div>
                     <div class="success-icon">
                         <span class="material-icons">check_circle</span>
                     </div>
@@ -157,7 +146,7 @@
                     <button class="btn btn-primary" onclick="app.showView('leaderboard')">
                         View Leaderboard
                     </button>
-                </div>
+                </div> -->
             </div>
 
             <!-- Leaderboard View -->
@@ -191,6 +180,22 @@
             <!-- Admin View -->
             <div id="adminView" class="view">
                 <h2 class="page-title">Admin Panel</h2>
+                
+                <!-- Admin Login Modal -->
+                <div id="adminLoginModal" class="modal">
+                    <div class="modal-content">
+                        <h3 class="card-title">Admin Login Required</h3>
+                        <form id="adminLoginForm" class="form">
+                            <div class="form-group">
+                                <label for="adminPassword" class="form-label">Admin Password</label>
+                                <input type="password" id="adminPassword" class="form-input" required autocomplete="current-password">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Login</button>
+                        </form>
+                    </div>
+                </div>
+                
+                <div id="adminContent" class="hidden">
                 
                 <div class="admin-grid">
                     <!-- Season Management -->
@@ -298,6 +303,7 @@
                         <div id="scoreEntrySection"></div>
                     </div>
                 </div>
+                </div> <!-- Close adminContent -->
             </div>
         </div>
     </main>

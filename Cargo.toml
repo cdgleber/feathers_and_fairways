@@ -19,6 +19,7 @@ dotenvy = "0.15"
 rand = "0.8"
 bcrypt = "0.15"
 validator = { version = "0.18", features = ["derive"] }
+base64 = "0.22"
 
 [profile.release]
 opt-level = 3

@@ -6,12 +6,28 @@ class FantasyGolfApp {
         this.currentSeason = null;
         this.selectedGolfers = new Map(); // Map<group, golferId>
         this.validatedKey = null;
+        this.adminToken = localStorage.getItem('adminToken');
+        this.selectedTournament = null;
         this.init();
     }
 
     async init() {
+        this.initDarkMode();
         this.setupEventListeners();
         await this.loadInitialData();
+    }
+
+    initDarkMode() {
+        // Load saved theme preference
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+
+    toggleDarkMode() {
+        const current = document.documentElement.getAttribute('data-theme');
+        const newTheme = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
     }
 
     setupEventListeners() {
@@ -19,9 +35,16 @@ class FantasyGolfApp {
         document.querySelectorAll('.nav-btn, .mobile-nav-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const view = e.currentTarget.dataset.view;
-                this.showView(view);
-                this.closeMobileNav();
+                if (view) {
+                    this.showView(view);
+                    this.closeMobileNav();
+                }
             });
+        });
+
+        // Dark mode toggle
+        document.getElementById('darkModeToggle')?.addEventListener('click', () => {
+            this.toggleDarkMode();
         });
 
         // Mobile menu toggle
@@ -29,6 +52,12 @@ class FantasyGolfApp {
         const mobileNav = document.getElementById('mobileNav');
         mobileMenuBtn?.addEventListener('click', () => {
             mobileNav.classList.toggle('active');
+        });
+
+        // Admin login
+        document.getElementById('adminLoginForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.adminLogin();
         });
 
         // Forms
@@ -91,10 +120,15 @@ class FantasyGolfApp {
         if (view) {
             view.classList.add('active');
             
+            // Check admin auth for admin view
+            if (viewName === 'admin') {
+                this.checkAdminAuth();
+            }
+            
             // Load data for specific views
             if (viewName === 'leaderboard') {
                 this.loadLeaderboards();
-            } else if (viewName === 'admin') {
+            } else if (viewName === 'admin' && this.adminToken) {
                 this.loadAdminData();
             }
         }
@@ -218,9 +252,12 @@ class FantasyGolfApp {
                 this.validatedKey = key;
                 this.showToast('Access key validated successfully!', 'success');
                 document.getElementById('teamBuilderSection').classList.remove('hidden');
-                await this.loadGolfersForSelection();
+                await this.loadTournamentsForSelection();
             } else if (result.already_used) {
-                this.showToast('This access key has already been used', 'error');
+                this.validatedKey = key;
+                this.showToast('Access key already used - you can edit existing teams', 'info');
+                document.getElementById('teamBuilderSection').classList.remove('hidden');
+                await this.loadTournamentsForSelection();
             } else {
                 this.showToast('Invalid access key', 'error');
             }
@@ -321,36 +358,64 @@ class FantasyGolfApp {
             return;
         }
 
+        if (!this.selectedTournament) {
+            this.showToast('Please select a tournament', 'error');
+            return;
+        }
+
         const golferIds = Array.from(this.selectedGolfers.values()).map(g => g.id);
 
         this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/teams`, {
+            // Check if updating existing team or creating new
+            const teamsResponse = await fetch(`${API_BASE}/teams/${this.currentSeason.id}`);
+            let isUpdate = false;
+            
+            if (teamsResponse.ok) {
+                const teams = await teamsResponse.json();
+                const existingTeam = teams.find(t => 
+                    t.tournament_id === this.selectedTournament && 
+                    t.player_name === playerName
+                );
+                isUpdate = !!existingTeam;
+            }
+
+            const endpoint = isUpdate ? `${API_BASE}/teams/update` : `${API_BASE}/teams`;
+            const payload = isUpdate ? {
+                key_code: this.validatedKey,
+                tournament_id: this.selectedTournament,
+                golfer_ids: golferIds
+            } : {
+                key_code: this.validatedKey,
+                player_name: playerName,
+                tournament_id: this.selectedTournament,
+                golfer_ids: golferIds
+            };
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    key_code: this.validatedKey,
-                    player_name: playerName,
-                    golfer_ids: golferIds
-                })
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
                 const result = await response.json();
-                this.showToast('Team created successfully!', 'success');
+                this.showToast(isUpdate ? 'Team updated successfully!' : 'Team created successfully!', 'success');
                 
                 // Hide form and show success message
                 document.getElementById('teamBuilderSection').classList.add('hidden');
                 const successSection = document.getElementById('teamCreatedSection');
                 successSection.classList.remove('hidden');
                 document.getElementById('teamCreatedMessage').textContent = 
-                    `Welcome, ${playerName}! Your team has been created with your selected golfers.`;
+                    isUpdate 
+                        ? `Your team has been updated for the selected tournament!`
+                        : `Welcome, ${playerName}! Your team has been created with your selected golfers.`;
             } else {
                 const error = await response.json();
-                this.showToast(error.message || 'Error creating team', 'error');
+                this.showToast(error.message || 'Error saving team', 'error');
             }
         } catch (error) {
-            this.showToast('Error creating team', 'error');
+            this.showToast('Error saving team', 'error');
             console.error(error);
         } finally {
             this.hideLoading();
@@ -488,7 +553,7 @@ class FantasyGolfApp {
 
         this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/seasons`, {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/seasons`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, year, start_date: startDate, end_date: endDate })
@@ -527,7 +592,7 @@ class FantasyGolfApp {
 
         this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/access-keys`, {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/access-keys`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ season_id: this.currentSeason.id, count })
@@ -574,7 +639,7 @@ class FantasyGolfApp {
 
         this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/golfers`, {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/golfers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, win_probability_group: winGroup })
@@ -613,7 +678,7 @@ class FantasyGolfApp {
 
         this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/tournaments`, {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/tournaments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -686,6 +751,204 @@ class FantasyGolfApp {
             toast.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
+    }
+    // Admin authentication
+    async adminLogin() {
+        const password = document.getElementById('adminPassword').value;
+        
+        this.showLoading();
+        try {
+            const response = await fetch(`${API_BASE}/admin/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.token) {
+                this.adminToken = result.token;
+                localStorage.setItem('adminToken', result.token);
+                this.showToast('Login successful!', 'success');
+                document.getElementById('adminLoginModal').classList.add('hidden');
+                document.getElementById('adminContent').classList.remove('hidden');
+                this.loadAdminData();
+            } else {
+                this.showToast('Invalid password', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error logging in', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    checkAdminAuth() {
+        const modal = document.getElementById('adminLoginModal');
+        const content = document.getElementById('adminContent');
+        
+        if (this.adminToken) {
+            modal.classList.add('hidden');
+            content.classList.remove('hidden');
+        } else {
+            modal.classList.remove('hidden');
+            content.classList.add('hidden');
+        }
+    }
+
+    adminLogout() {
+        this.adminToken = null;
+        localStorage.removeItem('adminToken');
+        this.showToast('Logged out', 'info');
+        this.showView('home');
+    }
+
+    async makeAdminRequest(url, options = {}) {
+        if (!this.adminToken) {
+            this.showToast('Admin authentication required', 'error');
+            throw new Error('Not authenticated');
+        }
+
+        return fetch(url, {
+            ...options,
+            headers: {
+                ...options.headers,
+                'Authorization': `Bearer ${this.adminToken}`,
+            }
+        });
+    }
+
+    async loadTournamentsForSelection() {
+        if (!this.currentSeason) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            if (response.ok) {
+                const tournaments = await response.json();
+                this.displayTournamentSelection(tournaments);
+            }
+        } catch (error) {
+            console.error('Error loading tournaments:', error);
+        }
+    }
+
+    displayTournamentSelection(tournaments) {
+        const upcomingTournaments = tournaments.filter(t => {
+            const startDate = new Date(t.start_date);
+            const now = new Date();
+            return startDate >= now;
+        });
+
+        if (upcomingTournaments.length === 0) {
+            this.showToast('No upcoming tournaments available', 'error');
+            return;
+        }
+
+        const container = document.getElementById('teamBuilderSection');
+        container.innerHTML = `
+            <h3 class="card-title">Select Tournament</h3>
+            <div class="form-group">
+                <label for="tournamentSelect" class="form-label">Choose a tournament to create/edit your team</label>
+                <select id="tournamentSelectForTeam" class="form-input">
+                    <option value="">-- Select Tournament --</option>
+                    ${upcomingTournaments.map(t => `
+                        <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
+                    `).join('')}
+                </select>
+            </div>
+            <div id="teamFormContainer"></div>
+        `;
+
+        document.getElementById('tournamentSelectForTeam').addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.selectedTournament = e.target.value;
+                this.checkExistingTeam();
+            }
+        });
+    }
+
+    async checkExistingTeam() {
+        if (!this.validatedKey || !this.selectedTournament) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/teams/${this.currentSeason.id}`);
+            if (response.ok) {
+                const teams = await response.json();
+                const existingTeam = teams.find(t => 
+                    t.tournament_id === this.selectedTournament
+                );
+
+                if (existingTeam) {
+                    this.loadExistingTeamForEdit(existingTeam.id);
+                } else {
+                    this.showTeamForm();
+                }
+            }
+        } catch (error) {
+            console.error('Error checking existing team:', error);
+            this.showTeamForm();
+        }
+    }
+
+    async loadExistingTeamForEdit(teamId) {
+        try {
+            const response = await fetch(`${API_BASE}/teams/${teamId}/golfers`);
+            if (response.ok) {
+                const golfers = await response.json();
+                
+                this.selectedGolfers.clear();
+                golfers.forEach(g => {
+                    this.selectedGolfers.set(g.win_probability_group, {
+                        id: g.id,
+                        name: g.name
+                    });
+                });
+
+                this.showTeamForm(true);
+                this.showToast('Editing existing team - you can update your selections', 'info');
+            }
+        } catch (error) {
+            console.error('Error loading existing team:', error);
+            this.showTeamForm();
+        }
+    }
+
+    async showTeamForm(isEdit = false) {
+        const container = document.getElementById('teamFormContainer');
+        
+        container.innerHTML = `
+            <form id="createTeamForm" class="form" style="margin-top: 20px;">
+                <div class="form-group">
+                    <label for="playerName" class="form-label">Your Name</label>
+                    <input 
+                        type="text" 
+                        id="playerName" 
+                        class="form-input" 
+                        placeholder="Enter your name"
+                        required>
+                </div>
+
+                <div class="selection-info">
+                    <p><strong>Select 6 golfers - one from each skill group</strong></p>
+                    <div id="selectionStatus" class="selection-status"></div>
+                </div>
+
+                <div id="golferGroups" class="golfer-groups"></div>
+
+                <button type="submit" class="btn btn-primary" id="createTeamBtn" disabled>
+                    <span class="material-icons">${isEdit ? 'edit' : 'add_circle'}</span>
+                    ${isEdit ? 'Update Team' : 'Create Team'}
+                </button>
+            </form>
+        `;
+
+        document.getElementById('createTeamForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.createTeam();
+        });
+
+        await this.loadGolfersForSelection();
     }
 }
 

@@ -74,6 +74,7 @@ pub struct AccessKeyValidationResponse {
 pub struct Team {
     pub id: Uuid,
     pub season_id: Uuid,
+    pub tournament_id: Option<Uuid>,
     pub player_name: String,
     pub access_key_id: Uuid,
     pub created_at: Option<DateTime<Utc>>,
@@ -85,6 +86,7 @@ pub struct CreateTeamRequest {
     pub key_code: String,
     #[validate(length(min = 1, max = 255))]
     pub player_name: String,
+    pub tournament_id: Uuid, //missing season id, check if this works
     #[validate(length(min = 6, max = 6))]
     pub golfer_ids: Vec<Uuid>,
 }
@@ -174,4 +176,26 @@ impl ApiError {
             message: message.into(),
         }
     }
+}
+
+//
+// Admin Login Models
+//
+#[derive(Debug, Deserialize)]
+pub struct AdminLoginRequest {
+    pub password: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminLoginResponse {
+    pub success: bool,
+    pub token: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateTeamRequest {
+    pub key_code: String,
+    pub tournament_id: Uuid,
+    #[validate(length(min = 6, max = 6))]
+    pub golfer_ids: Vec<Uuid>,
 }

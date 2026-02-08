@@ -1,11 +1,11 @@
 CREATE TABLE IF NOT EXISTS seasons (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
     year INTEGER NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(year)
 );
 

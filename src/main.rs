@@ -8,8 +8,9 @@ use axum::{
     routing::{get, post},
     middleware,
 };
-use sqlx::postgres::PgPoolOptions;
+use sqlx::sqlite::{SqlitePoolOptions, SqliteConnectOptions};
 use std::net::SocketAddr;
+use std::str::FromStr;
 use tower_http::{
     services::ServeDir,
     trace::TraceLayer,
@@ -30,29 +31,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load environment variables
     dotenvy::dotenv().ok();
-    
+
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
 
-    // Create database pool with retry logic
+    // Create SQLite database pool
     tracing::info!("Connecting to database...");
-    let pool = loop {
-        match PgPoolOptions::new()
-            .max_connections(5)
-            .acquire_timeout(std::time::Duration::from_secs(3))
-            .connect(&database_url)
-            .await
-        {
-            Ok(pool) => {
-                tracing::info!("Successfully connected to database");
-                break pool;
-            }
-            Err(e) => {
-                tracing::warn!("Failed to connect to database: {}. Retrying in 2 seconds...", e);
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            }
-        }
-    };
+    let options = SqliteConnectOptions::from_str(&database_url)?
+        .create_if_missing(true)
+        .pragma("journal_mode", "WAL")
+        .pragma("foreign_keys", "ON");
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(options)
+        .await?;
+    tracing::info!("Successfully connected to database");
 
     // Run migrations
     tracing::info!("Running database migrations...");
@@ -66,32 +60,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Public routes - Season routes
         .route("/api/seasons", get(routes::list_seasons))
         .route("/api/seasons/active", get(routes::get_active_season))
-        
+
         // Public routes - Access key validation
         .route("/api/access-keys/validate", post(routes::validate_access_key))
-        
+
         // Public routes - Golfer routes
         .route("/api/golfers", get(routes::list_golfers))
-        
+
         // Public routes - Team routes
         .route("/api/teams", post(routes::create_team))
         .route("/api/teams/update", post(routes::update_team))
         .route("/api/teams/:season_id", get(routes::list_teams))
         .route("/api/teams/:team_id/golfers", get(routes::get_team_golfers))
-        
+
         // Public routes - Tournament routes
         .route("/api/tournaments/:season_id", get(routes::list_tournaments))
-        
+
         // Public routes - Scores routes
         .route("/api/scores/tournament/:tournament_id", get(routes::get_tournament_scores))
-        
+
         // Public routes - Leaderboard routes
         .route("/api/leaderboard/:season_id", get(routes::get_season_leaderboard))
         .route("/api/leaderboard/tournament/:tournament_id", get(routes::get_tournament_leaderboard))
-        
+
         // Admin authentication
         .route("/api/admin/login", post(routes::admin_login))
-        
+
         // Protected admin routes (these will have middleware applied)
         .nest("/api/admin", Router::new()
             .route("/seasons", post(routes::create_season))
@@ -101,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/scores", post(routes::add_hole_scores))
             .layer(middleware::from_fn(auth::admin_auth_middleware))
         )
-        
+
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(pool)
@@ -112,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
 
     tracing::info!("Starting server on {}", addr);
-    
+
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
 

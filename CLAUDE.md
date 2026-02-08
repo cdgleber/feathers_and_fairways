@@ -4,15 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Feathers & Fairways is a fantasy golf league management application. Commissioners manage seasons and tournaments, players create 6-golfer teams using access keys, and the system tracks scores and leaderboards. Fantasy points are calculated via database triggers based on score-to-par.
+Feathers & Fairways is a fantasy golf league management application. Commissioners manage seasons and tournaments, players create 6-golfer teams using access keys, and the system tracks scores and leaderboards. Fantasy points are calculated in Rust application code based on score-to-par.
 
 ## Tech Stack
 
-- **Backend**: Rust (edition 2021), Axum 0.7, Tokio, SQLx 0.7 (compile-time checked queries)
-- **Database**: PostgreSQL 16
+- **Backend**: Rust (edition 2021), Axum 0.7, Tokio, SQLx 0.7 (runtime queries)
+- **Database**: SQLite (WAL mode, foreign keys enabled)
 - **Frontend**: Vanilla HTML/CSS/JS served as static files from `dist/`
 - **Auth**: Basic/Bearer auth middleware for admin routes
-- **Containerization**: Docker multi-stage build, Docker Compose
 
 ## Build & Run Commands
 
@@ -21,36 +20,33 @@ cargo build                    # Debug build
 cargo build --release          # Release build (LTO enabled)
 cargo run                      # Run dev server (port 3000)
 cargo test                     # Run tests
-sqlx migrate run               # Run database migrations
-cargo sqlx prepare             # Generate offline query metadata
-
-docker-compose up -d           # Start PostgreSQL
-docker-compose down -v         # Stop and remove volumes
 ```
 
-The app requires a running PostgreSQL instance and a `.env` file with `DATABASE_URL`, `RUST_LOG`, `HOST`, `PORT`, and `ADMIN_PASSWORD`.
+The app requires a `.env` file with `DATABASE_URL=sqlite:feathers_and_fairways.db`, `RUST_LOG`, `HOST`, `PORT`, and `ADMIN_PASSWORD`. The SQLite database is created automatically on first run.
 
 ## Architecture
 
 ### Backend (`src/`)
 
-- **main.rs** — App entry point: DB pool creation with retry logic, migration runner, Axum router setup with CORS/tracing middleware, static file serving from `dist/`
-- **routes.rs** — All API handlers (~650 lines). Contains business logic inline (validation, transactions, queries). This is the largest file and where most feature work happens.
-- **models.rs** — Structs for DB entities (`#[derive(FromRow)]`) and request types (`#[derive(Deserialize, Validate)]`). Separate structs for DB rows vs API requests.
+- **main.rs** — App entry point: SQLite pool creation with WAL/FK pragmas, migration runner, Axum router setup with CORS/tracing middleware, static file serving from `dist/`
+- **routes.rs** — All API handlers. Contains business logic inline (validation, transactions, queries). Uses runtime `sqlx::query_as::<_, Model>()` queries with `?` placeholders and `.bind()` chains. UUIDs generated in Rust via `uuid::Uuid::new_v4().to_string()`. Fantasy points calculated in Rust via `calculate_fantasy_points()` helper.
+- **models.rs** — Structs for DB entities (`#[derive(FromRow)]`) and request types (`#[derive(Deserialize, Validate)]`). All IDs are `String` (UUID text). Dates stored as `String` in `YYYY-MM-DD` format.
 - **auth.rs** — Tower middleware for `/api/admin/*` routes. Supports both Basic auth and Bearer token against `ADMIN_PASSWORD` env var.
 - **db.rs** — Utility for generating 12-char alphanumeric access keys.
 
 ### Database (`migrations/`)
 
 Seven sequential SQL migrations. Key design decisions:
-- UUIDs as primary keys (`gen_random_uuid()`)
-- Database triggers: `auto_calculate_fantasy_points` on hole_scores, `enforce_team_golfer_limit` (max 6 per team)
-- Fantasy points: eagle+ = +2, birdie = +1, par = 0, bogey+ = -1
-- Only one active season and one active tournament per season at a time (enforced in route handlers, not DB constraints)
+- UUIDs as TEXT primary keys (generated in Rust, not DB)
+- Booleans stored as INTEGER (0/1)
+- Dates stored as TEXT in ISO format
+- Fantasy points: eagle+ = +2, birdie = +1, par = 0, bogey+ = -1 (calculated in Rust before INSERT)
+- Team golfer limit (max 6) enforced in application code
+- Only one active season and one active tournament per season at a time (enforced in route handlers)
 
 ### Frontend (`dist/`)
 
-Single-page app with view switching via JS DOM manipulation. No build step — edit files directly. `app.js` handles API calls, form submission, leaderboard rendering. Material Design styling.
+Single-page app with view switching via JS DOM manipulation. No build step — edit files directly. `app.js` handles API calls, form submission, leaderboard rendering. Material Design styling with dark mode support.
 
 ## API Routes
 
@@ -67,4 +63,4 @@ Protected (admin auth middleware): `/api/admin/seasons`, `/api/admin/access-keys
 
 ## SQLx Notes
 
-This project uses SQLx compile-time query checking. The database must be running and `DATABASE_URL` set for `cargo build` to succeed, unless offline mode is prepared with `cargo sqlx prepare`.
+This project uses SQLx runtime query checking (not compile-time macros). No running database is needed at build time. The SQLite database file is created automatically when the server starts.

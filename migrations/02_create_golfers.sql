@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS golfers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
     win_probability_group INTEGER NOT NULL CHECK (win_probability_group >= 1 AND win_probability_group <= 6),
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(name)
 );
 

@@ -105,6 +105,19 @@ class FantasyGolfApp {
                 this.loadTournamentLeaderboard(e.target.value);
             }
         });
+
+        // Score file input
+        document.getElementById('scoreFileInput')?.addEventListener('change', (e) => {
+            this.previewScoreFile(e);
+        });
+
+        // Score upload tournament select
+        document.getElementById('scoreUploadTournament')?.addEventListener('change', () => {
+            const btn = document.getElementById('uploadScoresBtn');
+            if (btn) {
+                btn.disabled = !document.getElementById('scoreUploadTournament').value || !this.pendingScoreData;
+            }
+        });
     }
 
     closeMobileNav() {
@@ -536,8 +549,8 @@ class FantasyGolfApp {
     }
 
     async loadAdminData() {
-        // Load any admin-specific data here
         await this.loadTournaments();
+        await this.loadTournamentsForScoreUpload();
     }
 
     async createSeason() {
@@ -699,6 +712,136 @@ class FantasyGolfApp {
             }
         } catch (error) {
             this.showToast('Error creating tournament', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    // Score upload functions
+    async loadTournamentsForScoreUpload() {
+        if (!this.currentSeason) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            if (response.ok) {
+                const tournaments = await response.json();
+                const select = document.getElementById('scoreUploadTournament');
+                if (select) {
+                    select.innerHTML = '<option value="">Select a tournament</option>' +
+                        tournaments.map(t => `
+                            <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
+                        `).join('');
+                }
+            }
+        } catch (error) {
+            console.error('Error loading tournaments for score upload:', error);
+        }
+    }
+
+    previewScoreFile(event) {
+        const file = event.target.files[0];
+        const previewSection = document.getElementById('scorePreview');
+        const previewContent = document.getElementById('scorePreviewContent');
+        const uploadBtn = document.getElementById('uploadScoresBtn');
+
+        if (!file) {
+            previewSection.classList.add('hidden');
+            uploadBtn.disabled = true;
+            this.pendingScoreData = null;
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                // Validate basic structure
+                if (!data.pars || !Array.isArray(data.pars) || data.pars.length !== 18) {
+                    this.showToast('Invalid file: pars must be an array of 18 values', 'error');
+                    return;
+                }
+
+                if (!data.scores || !Array.isArray(data.scores) || data.scores.length === 0) {
+                    this.showToast('Invalid file: scores array is missing or empty', 'error');
+                    return;
+                }
+
+                this.pendingScoreData = data;
+
+                // Show preview
+                const golferCount = data.scores.length;
+                const days = [...new Set(data.scores.map(s => s.day))].sort();
+                const golferNames = data.scores.map(s => s.golfer);
+
+                previewContent.innerHTML = `
+                    <div class="info-card" style="margin-bottom: var(--spacing-md);">
+                        <p><strong>${golferCount}</strong> golfer score entries</p>
+                        <p>Days: <strong>${days.join(', ')}</strong></p>
+                        <p>Golfers: <strong>${golferNames.join(', ')}</strong></p>
+                        <p>Total hole scores: <strong>${golferCount * 18}</strong></p>
+                    </div>
+                `;
+
+                previewSection.classList.remove('hidden');
+                uploadBtn.disabled = !document.getElementById('scoreUploadTournament').value;
+            } catch (error) {
+                this.showToast('Invalid JSON file', 'error');
+                previewSection.classList.add('hidden');
+                uploadBtn.disabled = true;
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    async uploadScores() {
+        const tournamentId = document.getElementById('scoreUploadTournament').value;
+
+        if (!tournamentId) {
+            this.showToast('Please select a tournament', 'error');
+            return;
+        }
+
+        if (!this.pendingScoreData) {
+            this.showToast('Please select a score file first', 'error');
+            return;
+        }
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(
+                `${API_BASE}/admin/tournaments/${tournamentId}/scores/upload`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.pendingScoreData)
+                }
+            );
+
+            const result = await response.json();
+            const resultSection = document.getElementById('scoreUploadResult');
+
+            if (response.ok) {
+                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
+                html += `<p><strong>${result.total_scores_processed}</strong> hole scores processed successfully.</p>`;
+                if (result.errors.length > 0) {
+                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
+                    html += `<ul style="margin-left: 16px;">`;
+                    result.errors.forEach(err => {
+                        html += `<li>${err}</li>`;
+                    });
+                    html += `</ul>`;
+                }
+                html += `</div>`;
+                resultSection.innerHTML = html;
+                resultSection.classList.remove('hidden');
+                this.showToast('Scores uploaded successfully!', 'success');
+            } else {
+                this.showToast(result.message || 'Error uploading scores', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error uploading scores', 'error');
             console.error(error);
         } finally {
             this.hideLoading();

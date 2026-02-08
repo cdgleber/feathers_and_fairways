@@ -215,3 +215,23 @@ pub struct UpdateTeamRequest {
     #[validate(length(min = 6, max = 6))]
     pub golfer_ids: Vec<String>,
 }
+
+// JSON Score Upload
+#[derive(Debug, Deserialize)]
+pub struct ScoreUploadEntry {
+    pub golfer: String,
+    pub day: i32,
+    pub holes: Vec<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ScoreUploadRequest {
+    pub pars: Vec<i32>,
+    pub scores: Vec<ScoreUploadEntry>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ScoreUploadResponse {
+    pub total_scores_processed: usize,
+    pub errors: Vec<String>,
+}

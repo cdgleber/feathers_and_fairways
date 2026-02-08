@@ -737,3 +737,101 @@ pub async fn update_team(
 
     Ok(Json(TeamWithGolfers { team, golfers }))
 }
+
+// Upload tournament scores from JSON
+pub async fn upload_tournament_scores(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+    Json(payload): Json<ScoreUploadRequest>,
+) -> Result<Json<ScoreUploadResponse>, (StatusCode, Json<ApiError>)> {
+    // Validate pars array
+    if payload.pars.len() != 18 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("pars array must have exactly 18 elements")),
+        ));
+    }
+
+    // Verify tournament exists
+    let _tournament = sqlx::query_as::<_, Tournament>(
+        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+    )
+    .bind(&tournament_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+
+    let mut total_processed: usize = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    for entry in &payload.scores {
+        // Validate holes array
+        if entry.holes.len() != 18 {
+            errors.push(format!("{}: holes array must have exactly 18 elements", entry.golfer));
+            continue;
+        }
+
+        // Validate day
+        if entry.day < 1 || entry.day > 4 {
+            errors.push(format!("{}: day must be between 1 and 4", entry.golfer));
+            continue;
+        }
+
+        // Look up golfer by name (case-insensitive)
+        #[derive(sqlx::FromRow)]
+        struct GolferIdRow {
+            id: String,
+        }
+
+        let golfer = sqlx::query_as::<_, GolferIdRow>(
+            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
+        )
+        .bind(&entry.golfer)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        let golfer_id = match golfer {
+            Some(g) => g.id,
+            None => {
+                errors.push(format!("{}: golfer not found", entry.golfer));
+                continue;
+            }
+        };
+
+        // Insert scores for each hole
+        for (hole_index, &strokes) in entry.holes.iter().enumerate() {
+            let hole_num = (hole_index + 1) as i32;
+            let par = payload.pars[hole_index];
+            let score_to_par = strokes - par;
+            let fantasy_points = calculate_fantasy_points(score_to_par);
+            let id = new_id();
+
+            sqlx::query(
+                "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+                 ON CONFLICT (tournament_id, golfer_id, day, hole) \
+                 DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
+            )
+            .bind(&id)
+            .bind(&tournament_id)
+            .bind(&golfer_id)
+            .bind(entry.day)
+            .bind(hole_num)
+            .bind(strokes)
+            .bind(score_to_par)
+            .bind(fantasy_points)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+            total_processed += 1;
+        }
+    }
+
+    Ok(Json(ScoreUploadResponse {
+        total_scores_processed: total_processed,
+        errors,
+    }))
+}

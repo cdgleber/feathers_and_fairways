@@ -111,6 +111,11 @@ class FantasyGolfApp {
             this.previewScoreFile(e);
         });
 
+        // Golfer file input
+        document.getElementById('golferFileInput')?.addEventListener('change', (e) => {
+            this.previewGolferFile(e);
+        });
+
         // Score upload tournament select
         document.getElementById('scoreUploadTournament')?.addEventListener('change', () => {
             const btn = document.getElementById('uploadScoresBtn');
@@ -842,6 +847,108 @@ class FantasyGolfApp {
             }
         } catch (error) {
             this.showToast('Error uploading scores', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    // Golfer upload functions
+    previewGolferFile(event) {
+        const file = event.target.files[0];
+        const previewSection = document.getElementById('golferPreview');
+        const previewContent = document.getElementById('golferPreviewContent');
+        const uploadBtn = document.getElementById('uploadGolfersBtn');
+
+        if (!file) {
+            previewSection.classList.add('hidden');
+            uploadBtn.disabled = true;
+            this.pendingGolferData = null;
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                if (!data.golfers || !Array.isArray(data.golfers) || data.golfers.length === 0) {
+                    this.showToast('Invalid file: golfers array is missing or empty', 'error');
+                    return;
+                }
+
+                this.pendingGolferData = data;
+
+                const groupCounts = {};
+                data.golfers.forEach(g => {
+                    groupCounts[g.group] = (groupCounts[g.group] || 0) + 1;
+                });
+
+                const groupSummary = Object.entries(groupCounts)
+                    .sort(([a], [b]) => a - b)
+                    .map(([group, count]) => `Group ${group}: ${count}`)
+                    .join(', ');
+
+                previewContent.innerHTML = `
+                    <div class="info-card" style="margin-bottom: var(--spacing-md);">
+                        <p><strong>${data.golfers.length}</strong> golfers</p>
+                        <p>${groupSummary}</p>
+                        <p style="margin-top: 8px;"><strong>Names:</strong> ${data.golfers.map(g => g.name).join(', ')}</p>
+                    </div>
+                `;
+
+                previewSection.classList.remove('hidden');
+                uploadBtn.disabled = false;
+            } catch (error) {
+                this.showToast('Invalid JSON file', 'error');
+                previewSection.classList.add('hidden');
+                uploadBtn.disabled = true;
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    async uploadGolfers() {
+        if (!this.pendingGolferData) {
+            this.showToast('Please select a golfer file first', 'error');
+            return;
+        }
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(
+                `${API_BASE}/admin/golfers/upload`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.pendingGolferData)
+                }
+            );
+
+            const result = await response.json();
+            const resultSection = document.getElementById('golferUploadResult');
+
+            if (response.ok) {
+                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
+                html += `<p><strong>${result.total_created}</strong> golfers created, <strong>${result.total_updated}</strong> updated.</p>`;
+                if (result.errors.length > 0) {
+                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
+                    html += `<ul style="margin-left: 16px;">`;
+                    result.errors.forEach(err => {
+                        html += `<li>${err}</li>`;
+                    });
+                    html += `</ul>`;
+                }
+                html += `</div>`;
+                resultSection.innerHTML = html;
+                resultSection.classList.remove('hidden');
+                this.showToast('Golfers uploaded successfully!', 'success');
+                await this.loadStats();
+            } else {
+                this.showToast(result.message || 'Error uploading golfers', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error uploading golfers', 'error');
             console.error(error);
         } finally {
             this.hideLoading();

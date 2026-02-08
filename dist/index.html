@@ -269,6 +269,29 @@
                         </form>
                     </div>
 
+                    <!-- Golfer Upload -->
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">upload_file</span>
+                            Upload Golfers (JSON)
+                        </h3>
+                        <div class="form">
+                            <div class="form-group">
+                                <label for="golferFileInput" class="form-label">Golfer File (.json)</label>
+                                <input type="file" id="golferFileInput" class="form-input" accept=".json">
+                            </div>
+                            <div id="golferPreview" class="hidden">
+                                <h4 class="card-title">Preview</h4>
+                                <div id="golferPreviewContent"></div>
+                            </div>
+                            <button class="btn btn-primary" id="uploadGolfersBtn" disabled onclick="app.uploadGolfers()">
+                                <span class="material-icons">cloud_upload</span>
+                                Upload Golfers
+                            </button>
+                            <div id="golferUploadResult" class="hidden"></div>
+                        </div>
+                    </div>
+
                     <!-- Tournament Management -->
                     <div class="card">
                         <h3 class="card-title">

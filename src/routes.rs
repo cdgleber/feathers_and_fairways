@@ -589,6 +589,77 @@ pub async fn get_tournament_leaderboard(
     Ok(Json(leaderboard))
 }
 
+// Upload golfers from JSON
+pub async fn upload_golfers(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<GolferUploadRequest>,
+) -> Result<Json<GolferUploadResponse>, (StatusCode, Json<ApiError>)> {
+    if payload.golfers.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("golfers array is empty")),
+        ));
+    }
+
+    let mut total_created: usize = 0;
+    let mut total_updated: usize = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    for entry in &payload.golfers {
+        if entry.group < 1 || entry.group > 6 {
+            errors.push(format!("{}: group must be between 1 and 6", entry.name));
+            continue;
+        }
+
+        if entry.name.trim().is_empty() {
+            errors.push("Empty golfer name".to_string());
+            continue;
+        }
+
+        // Check if golfer already exists
+        #[derive(sqlx::FromRow)]
+        struct ExistsRow {
+            id: String,
+        }
+
+        let existing = sqlx::query_as::<_, ExistsRow>(
+            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
+        )
+        .bind(entry.name.trim())
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        let id = match &existing {
+            Some(row) => row.id.clone(),
+            None => new_id(),
+        };
+
+        sqlx::query(
+            "INSERT INTO golfers (id, name, win_probability_group) VALUES (?, ?, ?) \
+             ON CONFLICT(name) DO UPDATE SET win_probability_group = excluded.win_probability_group, is_active = 1"
+        )
+        .bind(&id)
+        .bind(entry.name.trim())
+        .bind(entry.group)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        if existing.is_some() {
+            total_updated += 1;
+        } else {
+            total_created += 1;
+        }
+    }
+
+    Ok(Json(GolferUploadResponse {
+        total_created,
+        total_updated,
+        errors,
+    }))
+}
+
 // Admin authentication
 pub async fn admin_login(
     Json(payload): Json<AdminLoginRequest>,

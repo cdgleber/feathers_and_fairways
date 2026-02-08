@@ -235,3 +235,22 @@ pub struct ScoreUploadResponse {
     pub total_scores_processed: usize,
     pub errors: Vec<String>,
 }
+
+// JSON Golfer Upload
+#[derive(Debug, Deserialize)]
+pub struct GolferUploadEntry {
+    pub name: String,
+    pub group: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GolferUploadRequest {
+    pub golfers: Vec<GolferUploadEntry>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GolferUploadResponse {
+    pub total_created: usize,
+    pub total_updated: usize,
+    pub errors: Vec<String>,
+}

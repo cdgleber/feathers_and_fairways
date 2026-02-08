@@ -504,6 +504,68 @@ pub async fn get_season_leaderboard(
     Ok(Json(leaderboard))
 }
 
+pub async fn get_season_leaderboard_with_golfers(
+    State(pool): State<SqlitePool>,
+    Path(season_id): Path<String>,
+) -> Result<Json<Vec<LeaderboardEntryWithGolfers>>, (StatusCode, Json<ApiError>)> {
+    // Get leaderboard entries
+    let leaderboard = sqlx::query_as::<_, LeaderboardEntry>(
+        "SELECT \
+            t.player_name, \
+            t.id as team_id, \
+            COALESCE(SUM(hs.fantasy_points), 0) as total_points \
+         FROM teams t \
+         LEFT JOIN team_golfers tg ON t.id = tg.team_id \
+         LEFT JOIN hole_scores hs ON tg.golfer_id = hs.golfer_id \
+         LEFT JOIN tournaments tour ON hs.tournament_id = tour.id AND tour.season_id = ? \
+         WHERE t.season_id = ? \
+         GROUP BY t.id, t.player_name \
+         ORDER BY total_points DESC"
+    )
+    .bind(&season_id)
+    .bind(&season_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Batch-fetch all team golfers for this season
+    let team_golfers = sqlx::query_as::<_, TeamGolferRow>(
+        "SELECT tg.team_id, g.id, g.name, g.win_probability_group \
+         FROM team_golfers tg \
+         INNER JOIN golfers g ON tg.golfer_id = g.id \
+         INNER JOIN teams t ON tg.team_id = t.id \
+         WHERE t.season_id = ? \
+         ORDER BY g.win_probability_group"
+    )
+    .bind(&season_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Group golfers by team_id
+    let mut golfers_by_team: std::collections::HashMap<String, Vec<GolferSummary>> = std::collections::HashMap::new();
+    for row in team_golfers {
+        golfers_by_team.entry(row.team_id).or_default().push(GolferSummary {
+            id: row.id,
+            name: row.name,
+            win_probability_group: row.win_probability_group,
+        });
+    }
+
+    // Combine leaderboard entries with golfers
+    let result: Vec<LeaderboardEntryWithGolfers> = leaderboard
+        .into_iter()
+        .map(|entry| LeaderboardEntryWithGolfers {
+            player_name: entry.player_name,
+            team_id: entry.team_id.clone(),
+            total_points: entry.total_points.unwrap_or(0),
+            golfers: golfers_by_team.remove(&entry.team_id).unwrap_or_default(),
+        })
+        .collect();
+
+    Ok(Json(result))
+}
+
 pub async fn get_tournament_leaderboard(
     State(pool): State<SqlitePool>,
     Path(tournament_id): Path<String>,

@@ -425,7 +425,7 @@ class FantasyGolfApp {
 
         this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/leaderboard/${this.currentSeason.id}`);
+            const response = await fetch(`${API_BASE}/leaderboard/${this.currentSeason.id}/detailed`);
             if (response.ok) {
                 const leaderboard = await response.json();
                 this.displaySeasonLeaderboard(leaderboard);
@@ -440,7 +440,7 @@ class FantasyGolfApp {
 
     displaySeasonLeaderboard(leaderboard) {
         const container = document.getElementById('seasonLeaderboard');
-        
+
         if (leaderboard.length === 0) {
             container.innerHTML = '<p class="loading">No teams yet. Be the first to join!</p>';
             return;
@@ -452,6 +452,7 @@ class FantasyGolfApp {
                     <tr>
                         <th>Rank</th>
                         <th>Player</th>
+                        <th>Golfers</th>
                         <th>Points</th>
                     </tr>
                 </thead>
@@ -460,6 +461,7 @@ class FantasyGolfApp {
                         <tr>
                             <td><span class="rank rank-${index + 1}">#${index + 1}</span></td>
                             <td>${entry.player_name}</td>
+                            <td><span class="golfer-names">${entry.golfers.map(g => g.name).join(', ')}</span></td>
                             <td><span class="points">${entry.total_points}</span></td>
                         </tr>
                     `).join('')}

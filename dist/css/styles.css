@@ -628,6 +628,12 @@ body {
     color: var(--success);
 }
 
+.golfer-names {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
 /* Admin Grid */
 .admin-grid {
     display: grid;

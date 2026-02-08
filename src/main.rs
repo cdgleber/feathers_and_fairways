@@ -81,6 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Public routes - Leaderboard routes
         .route("/api/leaderboard/:season_id", get(routes::get_season_leaderboard))
+        .route("/api/leaderboard/:season_id/detailed", get(routes::get_season_leaderboard_with_golfers))
         .route("/api/leaderboard/tournament/:tournament_id", get(routes::get_tournament_leaderboard))
 
         // Admin authentication

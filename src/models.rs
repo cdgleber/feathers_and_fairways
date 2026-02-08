@@ -154,6 +154,29 @@ pub struct LeaderboardEntry {
     pub total_points: Option<i64>,
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub struct GolferSummary {
+    pub id: String,
+    pub name: String,
+    pub win_probability_group: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LeaderboardEntryWithGolfers {
+    pub player_name: String,
+    pub team_id: String,
+    pub total_points: i64,
+    pub golfers: Vec<GolferSummary>,
+}
+
+#[derive(Debug, FromRow)]
+pub struct TeamGolferRow {
+    pub team_id: String,
+    pub id: String,
+    pub name: String,
+    pub win_probability_group: i32,
+}
+
 #[derive(Debug, Serialize, FromRow)]
 pub struct TournamentScore {
     pub golfer_name: String,

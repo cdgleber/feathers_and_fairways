@@ -199,6 +199,27 @@ pub async fn list_golfers(
     Ok(Json(golfers))
 }
 
+pub async fn list_golfers_for_tournament(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
+    let golfers = sqlx::query_as::<_, Golfer>(
+        "SELECT g.id, g.name, \
+         COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+         g.is_active, g.created_at \
+         FROM golfers g \
+         LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+         WHERE g.is_active = 1 \
+         ORDER BY win_probability_group, name"
+    )
+    .bind(&tournament_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(golfers))
+}
+
 // Team routes
 pub async fn create_team(
     State(pool): State<SqlitePool>,
@@ -224,13 +245,19 @@ pub async fn create_team(
         ));
     }
 
-    // Verify golfer selection (one from each group)
+    // Verify golfer selection (one from each group, using tournament-specific groups)
     let mut groups_used = std::collections::HashSet::new();
 
     for golfer_id in &payload.golfer_ids {
         let golfer = sqlx::query_as::<_, Golfer>(
-            "SELECT id, name, win_probability_group, is_active, created_at FROM golfers WHERE id = ?"
+            "SELECT g.id, g.name, \
+             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+             g.is_active, g.created_at \
+             FROM golfers g \
+             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             WHERE g.id = ?"
         )
+        .bind(&payload.tournament_id)
         .bind(golfer_id)
         .fetch_optional(&pool)
         .await
@@ -660,6 +687,84 @@ pub async fn upload_golfers(
     }))
 }
 
+// Upload tournament-specific golfer groups
+pub async fn upload_tournament_golfer_groups(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+    Json(payload): Json<TournamentGolferGroupUploadRequest>,
+) -> Result<Json<TournamentGolferGroupUploadResponse>, (StatusCode, Json<ApiError>)> {
+    // Verify tournament exists
+    let _tournament = sqlx::query_as::<_, Tournament>(
+        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+    )
+    .bind(&tournament_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+
+    if payload.groups.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("groups array is empty")),
+        ));
+    }
+
+    let mut total_processed: usize = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    for entry in &payload.groups {
+        if entry.group < 1 || entry.group > 6 {
+            errors.push(format!("{}: group must be between 1 and 6", entry.golfer));
+            continue;
+        }
+
+        // Look up golfer by name (case-insensitive)
+        #[derive(sqlx::FromRow)]
+        struct GolferIdRow {
+            id: String,
+        }
+
+        let golfer = sqlx::query_as::<_, GolferIdRow>(
+            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
+        )
+        .bind(&entry.golfer)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        let golfer_id = match golfer {
+            Some(g) => g.id,
+            None => {
+                errors.push(format!("{}: golfer not found", entry.golfer));
+                continue;
+            }
+        };
+
+        let id = new_id();
+        sqlx::query(
+            "INSERT INTO tournament_golfer_groups (id, tournament_id, golfer_id, win_probability_group) \
+             VALUES (?, ?, ?, ?) \
+             ON CONFLICT(tournament_id, golfer_id) \
+             DO UPDATE SET win_probability_group = excluded.win_probability_group"
+        )
+        .bind(&id)
+        .bind(&tournament_id)
+        .bind(&golfer_id)
+        .bind(entry.group)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        total_processed += 1;
+    }
+
+    Ok(Json(TournamentGolferGroupUploadResponse {
+        total_processed,
+        errors,
+    }))
+}
+
 // Admin authentication
 pub async fn admin_login(
     Json(payload): Json<AdminLoginRequest>,
@@ -739,13 +844,19 @@ pub async fn update_team(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
     .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Team not found for this tournament"))))?;
 
-    // Verify golfer selection (one from each group)
+    // Verify golfer selection (one from each group, using tournament-specific groups)
     let mut groups_used = std::collections::HashSet::new();
 
     for golfer_id in &payload.golfer_ids {
         let golfer = sqlx::query_as::<_, Golfer>(
-            "SELECT id, name, win_probability_group, is_active, created_at FROM golfers WHERE id = ?"
+            "SELECT g.id, g.name, \
+             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+             g.is_active, g.created_at \
+             FROM golfers g \
+             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             WHERE g.id = ?"
         )
+        .bind(&payload.tournament_id)
         .bind(golfer_id)
         .fetch_optional(&pool)
         .await

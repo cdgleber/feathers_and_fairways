@@ -66,6 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Public routes - Golfer routes
         .route("/api/golfers", get(routes::list_golfers))
+        .route("/api/golfers/tournament/:tournament_id", get(routes::list_golfers_for_tournament))
 
         // Public routes - Team routes
         .route("/api/teams", post(routes::create_team))
@@ -96,6 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/scores", post(routes::add_hole_scores))
             .route("/tournaments/:tournament_id/scores/upload", post(routes::upload_tournament_scores))
             .route("/golfers/upload", post(routes::upload_golfers))
+            .route("/tournaments/:tournament_id/groups/upload", post(routes::upload_tournament_golfer_groups))
             .layer(middleware::from_fn(auth::admin_auth_middleware))
         )
 

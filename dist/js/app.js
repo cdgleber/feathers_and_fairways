@@ -116,6 +116,19 @@ class FantasyGolfApp {
             this.previewGolferFile(e);
         });
 
+        // Group file input
+        document.getElementById('groupFileInput')?.addEventListener('change', (e) => {
+            this.previewGroupFile(e);
+        });
+
+        // Group upload tournament select
+        document.getElementById('groupUploadTournament')?.addEventListener('change', () => {
+            const btn = document.getElementById('uploadGroupsBtn');
+            if (btn) {
+                btn.disabled = !document.getElementById('groupUploadTournament').value || !this.pendingGroupData;
+            }
+        });
+
         // Score upload tournament select
         document.getElementById('scoreUploadTournament')?.addEventListener('change', () => {
             const btn = document.getElementById('uploadScoresBtn');
@@ -287,7 +300,10 @@ class FantasyGolfApp {
 
     async loadGolfersForSelection() {
         try {
-            const response = await fetch(`${API_BASE}/golfers`);
+            const url = this.selectedTournament
+                ? `${API_BASE}/golfers/tournament/${this.selectedTournament}`
+                : `${API_BASE}/golfers`;
+            const response = await fetch(url);
             const golfers = await response.json();
 
             // Group golfers by win probability group
@@ -556,6 +572,7 @@ class FantasyGolfApp {
     async loadAdminData() {
         await this.loadTournaments();
         await this.loadTournamentsForScoreUpload();
+        await this.loadTournamentsForGroupUpload();
     }
 
     async createSeason() {
@@ -741,6 +758,26 @@ class FantasyGolfApp {
             }
         } catch (error) {
             console.error('Error loading tournaments for score upload:', error);
+        }
+    }
+
+    async loadTournamentsForGroupUpload() {
+        if (!this.currentSeason) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            if (response.ok) {
+                const tournaments = await response.json();
+                const select = document.getElementById('groupUploadTournament');
+                if (select) {
+                    select.innerHTML = '<option value="">Select a tournament</option>' +
+                        tournaments.map(t => `
+                            <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
+                        `).join('');
+                }
+            }
+        } catch (error) {
+            console.error('Error loading tournaments for group upload:', error);
         }
     }
 
@@ -949,6 +986,114 @@ class FantasyGolfApp {
             }
         } catch (error) {
             this.showToast('Error uploading golfers', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    // Tournament golfer group upload functions
+    previewGroupFile(event) {
+        const file = event.target.files[0];
+        const previewSection = document.getElementById('groupPreview');
+        const previewContent = document.getElementById('groupPreviewContent');
+        const uploadBtn = document.getElementById('uploadGroupsBtn');
+
+        if (!file) {
+            previewSection.classList.add('hidden');
+            uploadBtn.disabled = true;
+            this.pendingGroupData = null;
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                if (!data.groups || !Array.isArray(data.groups) || data.groups.length === 0) {
+                    this.showToast('Invalid file: groups array is missing or empty', 'error');
+                    return;
+                }
+
+                this.pendingGroupData = data;
+
+                const groupCounts = {};
+                data.groups.forEach(g => {
+                    groupCounts[g.group] = (groupCounts[g.group] || 0) + 1;
+                });
+
+                const groupSummary = Object.entries(groupCounts)
+                    .sort(([a], [b]) => a - b)
+                    .map(([group, count]) => `Group ${group}: ${count}`)
+                    .join(', ');
+
+                previewContent.innerHTML = `
+                    <div class="info-card" style="margin-bottom: var(--spacing-md);">
+                        <p><strong>${data.groups.length}</strong> golfer group assignments</p>
+                        <p>${groupSummary}</p>
+                        <p style="margin-top: 8px;"><strong>Golfers:</strong> ${data.groups.map(g => `${g.golfer} (G${g.group})`).join(', ')}</p>
+                    </div>
+                `;
+
+                previewSection.classList.remove('hidden');
+                uploadBtn.disabled = !document.getElementById('groupUploadTournament').value;
+            } catch (error) {
+                this.showToast('Invalid JSON file', 'error');
+                previewSection.classList.add('hidden');
+                uploadBtn.disabled = true;
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    async uploadTournamentGroups() {
+        const tournamentId = document.getElementById('groupUploadTournament').value;
+
+        if (!tournamentId) {
+            this.showToast('Please select a tournament', 'error');
+            return;
+        }
+
+        if (!this.pendingGroupData) {
+            this.showToast('Please select a groups file first', 'error');
+            return;
+        }
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(
+                `${API_BASE}/admin/tournaments/${tournamentId}/groups/upload`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.pendingGroupData)
+                }
+            );
+
+            const result = await response.json();
+            const resultSection = document.getElementById('groupUploadResult');
+
+            if (response.ok) {
+                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
+                html += `<p><strong>${result.total_processed}</strong> golfer group assignments processed.</p>`;
+                if (result.errors.length > 0) {
+                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
+                    html += `<ul style="margin-left: 16px;">`;
+                    result.errors.forEach(err => {
+                        html += `<li>${err}</li>`;
+                    });
+                    html += `</ul>`;
+                }
+                html += `</div>`;
+                resultSection.innerHTML = html;
+                resultSection.classList.remove('hidden');
+                this.showToast('Tournament groups uploaded successfully!', 'success');
+            } else {
+                this.showToast(result.message || 'Error uploading groups', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error uploading tournament groups', 'error');
             console.error(error);
         } finally {
             this.hideLoading();

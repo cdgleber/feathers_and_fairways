@@ -345,6 +345,35 @@
                             <div id="scoreUploadResult" class="hidden"></div>
                         </div>
                     </div>
+
+                    <!-- Tournament Golfer Groups -->
+                    <div class="card full-width">
+                        <h3 class="card-title">
+                            <span class="material-icons">swap_vert</span>
+                            Tournament Golfer Groups
+                        </h3>
+                        <div class="form">
+                            <div class="form-group">
+                                <label for="groupUploadTournament" class="form-label">Tournament</label>
+                                <select id="groupUploadTournament" class="form-input">
+                                    <option value="">Select a tournament</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="groupFileInput" class="form-label">Groups File (.json)</label>
+                                <input type="file" id="groupFileInput" class="form-input" accept=".json">
+                            </div>
+                            <div id="groupPreview" class="hidden">
+                                <h4 class="card-title">Preview</h4>
+                                <div id="groupPreviewContent"></div>
+                            </div>
+                            <button class="btn btn-primary" id="uploadGroupsBtn" disabled onclick="app.uploadTournamentGroups()">
+                                <span class="material-icons">cloud_upload</span>
+                                Upload Groups
+                            </button>
+                            <div id="groupUploadResult" class="hidden"></div>
+                        </div>
+                    </div>
                 </div>
                 </div> <!-- Close adminContent -->
             </div>

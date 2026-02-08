@@ -254,3 +254,21 @@ pub struct GolferUploadResponse {
     pub total_updated: usize,
     pub errors: Vec<String>,
 }
+
+// Tournament Golfer Groups
+#[derive(Debug, Deserialize)]
+pub struct TournamentGolferGroupUploadEntry {
+    pub golfer: String,
+    pub group: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TournamentGolferGroupUploadRequest {
+    pub groups: Vec<TournamentGolferGroupUploadEntry>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TournamentGolferGroupUploadResponse {
+    pub total_processed: usize,
+    pub errors: Vec<String>,
+}

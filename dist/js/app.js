@@ -181,21 +181,19 @@ class FantasyGolfApp {
         if (!this.currentSeason) return;
 
         container.innerHTML = `
-            <h4 style="font-size: 20px; font-weight: 600; margin-bottom: 12px;">
-                ${this.currentSeason.name}
-            </h4>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <h4 class="season-info-title">${this.currentSeason.name}</h4>
+            <div class="season-info-grid">
                 <div>
-                    <p style="color: var(--text-secondary); font-size: 14px;">Year</p>
-                    <p style="font-weight: 600;">${this.currentSeason.year}</p>
+                    <p class="season-info-label">Year</p>
+                    <p class="season-info-value">${this.currentSeason.year}</p>
                 </div>
                 <div>
-                    <p style="color: var(--text-secondary); font-size: 14px;">Start Date</p>
-                    <p style="font-weight: 600;">${this.formatDate(this.currentSeason.start_date)}</p>
+                    <p class="season-info-label">Start Date</p>
+                    <p class="season-info-value">${this.formatDate(this.currentSeason.start_date)}</p>
                 </div>
                 <div>
-                    <p style="color: var(--text-secondary); font-size: 14px;">End Date</p>
-                    <p style="font-weight: 600;">${this.formatDate(this.currentSeason.end_date)}</p>
+                    <p class="season-info-label">End Date</p>
+                    <p class="season-info-value">${this.formatDate(this.currentSeason.end_date)}</p>
                 </div>
             </div>
         `;
@@ -619,9 +617,9 @@ class FantasyGolfApp {
         container.innerHTML = keys.map(key => `
             <div class="key-item">
                 <span class="key-code">${key.key_code}</span>
-                <button class="btn btn-secondary" style="padding: 4px 12px; font-size: 14px;" 
+                <button class="btn btn-secondary btn-sm"
                         onclick="app.copyToClipboard('${key.key_code}')">
-                    <span class="material-icons" style="font-size: 16px;">content_copy</span>
+                    <span class="material-icons">content_copy</span>
                     Copy
                 </button>
             </div>

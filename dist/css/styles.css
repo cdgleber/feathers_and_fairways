@@ -53,14 +53,52 @@
     --surface: #1E1E1E;
     --surface-variant: #2C2C2C;
     --border: #3C3C3C;
-    
+
     --text-primary: #E0E0E0;
     --text-secondary: #A0A0A0;
     --text-disabled: #6C6C6C;
-    
+
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.4);
     --shadow-md: 0 3px 6px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.3);
     --shadow-lg: 0 10px 20px rgba(0,0,0,0.4), 0 3px 6px rgba(0,0,0,0.35);
+}
+
+/* Dark mode rank badge colors with subtle glow */
+[data-theme="dark"] .rank-1 { color: #FFD700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.3); }
+[data-theme="dark"] .rank-2 { color: #D0D0D0; text-shadow: 0 0 8px rgba(208, 208, 208, 0.3); }
+[data-theme="dark"] .rank-3 { color: #E0935A; text-shadow: 0 0 8px rgba(205, 127, 50, 0.3); }
+
+/* Dark mode form input text */
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .form-input::placeholder {
+    color: var(--text-disabled);
+}
+
+/* Dark mode focus ring - stronger for visibility */
+[data-theme="dark"] .form-input:focus,
+[data-theme="dark"] .form-select:focus {
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.25);
+}
+
+/* Dark mode selection badge contrast */
+[data-theme="dark"] .selection-badge {
+    background: var(--surface-variant);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .selection-badge.selected {
+    background: var(--primary-dark);
+    color: var(--text-on-primary);
+    border-color: var(--primary-light);
+}
+
+/* Dark mode mobile nav button text */
+[data-theme="dark"] .mobile-nav-btn {
+    color: var(--text-primary);
 }
 
 * {
@@ -408,6 +446,15 @@ body {
     background: var(--secondary-dark);
 }
 
+.btn-sm {
+    padding: 4px 12px;
+    font-size: 14px;
+}
+
+.btn-sm .material-icons {
+    font-size: 16px;
+}
+
 /* Selection Info */
 .selection-info {
     background: var(--surface-variant);
@@ -473,7 +520,8 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    min-height: 48px;
     background: var(--surface-variant);
     border-radius: var(--radius-md);
     cursor: pointer;
@@ -735,47 +783,71 @@ body {
     .nav {
         display: none;
     }
-    
+
     .mobile-menu-btn {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 48px;
+        min-height: 48px;
     }
-    
+
     .hero-title {
         font-size: 32px;
     }
-    
+
     .hero-subtitle {
         font-size: 16px;
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .admin-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .form-row {
         grid-template-columns: 1fr;
     }
-    
+
     .golfer-list {
         grid-template-columns: 1fr;
     }
-    
+
     .tabs {
         overflow-x: auto;
         white-space: nowrap;
     }
-    
+
     .toast-container {
         right: var(--spacing-sm);
         left: var(--spacing-sm);
     }
-    
+
     .toast {
         min-width: auto;
+    }
+
+    .btn {
+        width: 100%;
+    }
+
+    .leaderboard th,
+    .leaderboard td {
+        padding: var(--spacing-sm);
+        font-size: 14px;
+    }
+
+    .rank {
+        font-size: 16px;
+    }
+
+    .modal-content {
+        width: 95%;
+        max-height: 90vh;
+        overflow-y: auto;
     }
 }
 
@@ -783,7 +855,11 @@ body {
     .logo h1 {
         font-size: 18px;
     }
-    
+
+    .page-title {
+        font-size: 24px;
+    }
+
     .hero-title {
         font-size: 24px;
     }
@@ -829,6 +905,28 @@ body {
 
 [data-theme="dark"] #darkModeToggle .material-icons::before {
     content: "light_mode";
+}
+
+/* Season Info (replaces inline styles) */
+.season-info-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.season-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.season-info-label {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.season-info-value {
+    font-weight: 600;
 }
 
 /* Smooth transitions for theme change */

@@ -657,25 +657,31 @@ pub async fn upload_golfers(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
-        let id = match &existing {
-            Some(row) => row.id.clone(),
-            None => new_id(),
-        };
+        if let Some(row) = existing {
+            // Update existing golfer (avoids case-sensitivity mismatch with ON CONFLICT)
+            sqlx::query(
+                "UPDATE golfers SET win_probability_group = ?, is_active = 1 WHERE id = ?"
+            )
+            .bind(entry.group)
+            .bind(&row.id)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
-        sqlx::query(
-            "INSERT INTO golfers (id, name, win_probability_group) VALUES (?, ?, ?) \
-             ON CONFLICT(name) DO UPDATE SET win_probability_group = excluded.win_probability_group, is_active = 1"
-        )
-        .bind(&id)
-        .bind(entry.name.trim())
-        .bind(entry.group)
-        .execute(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-        if existing.is_some() {
             total_updated += 1;
         } else {
+            // Insert new golfer
+            let id = new_id();
+            sqlx::query(
+                "INSERT INTO golfers (id, name, win_probability_group) VALUES (?, ?, ?)"
+            )
+            .bind(&id)
+            .bind(entry.name.trim())
+            .bind(entry.group)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
             total_created += 1;
         }
     }

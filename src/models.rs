@@ -272,3 +272,39 @@ pub struct TournamentGolferGroupUploadResponse {
     pub total_processed: usize,
     pub errors: Vec<String>,
 }
+
+// Completed Tournament History
+#[derive(Debug, Serialize, FromRow)]
+pub struct CompletedTournament {
+    pub id: String,
+    pub name: String,
+    pub start_date: String,
+    pub end_date: String,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct TournamentTeamLeaderboardEntry {
+    pub player_name: String,
+    pub team_id: String,
+    pub total_points: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TournamentTeamLeaderboardEntryWithGolfers {
+    pub player_name: String,
+    pub team_id: String,
+    pub total_points: i64,
+    pub golfers: Vec<GolferSummary>,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct TournamentStats {
+    pub total_holes_played: i64,
+    pub total_fantasy_points: i64,
+    pub eagles_or_better: i64,
+    pub birdies: i64,
+    pub pars: i64,
+    pub bogeys_or_worse: i64,
+    pub best_round_golfer: Option<String>,
+    pub best_round_points: Option<i64>,
+}

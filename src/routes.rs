@@ -1023,3 +1023,142 @@ pub async fn upload_tournament_scores(
         errors,
     }))
 }
+
+// Completed tournaments for a season
+pub async fn get_completed_tournaments(
+    State(pool): State<SqlitePool>,
+    Path(season_id): Path<String>,
+) -> Result<Json<Vec<CompletedTournament>>, (StatusCode, Json<ApiError>)> {
+    let tournaments = sqlx::query_as::<_, CompletedTournament>(
+        "SELECT id, name, start_date, end_date FROM tournaments \
+         WHERE season_id = ? AND end_date < date('now') \
+         ORDER BY start_date DESC"
+    )
+    .bind(&season_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(tournaments))
+}
+
+// Team leaderboard for a specific tournament
+pub async fn get_tournament_team_leaderboard(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+) -> Result<Json<Vec<TournamentTeamLeaderboardEntryWithGolfers>>, (StatusCode, Json<ApiError>)> {
+    let leaderboard = sqlx::query_as::<_, TournamentTeamLeaderboardEntry>(
+        "SELECT \
+            t.player_name, \
+            t.id as team_id, \
+            COALESCE(SUM(hs.fantasy_points), 0) as total_points \
+         FROM teams t \
+         LEFT JOIN team_golfers tg ON t.id = tg.team_id \
+         LEFT JOIN hole_scores hs ON tg.golfer_id = hs.golfer_id AND hs.tournament_id = ? \
+         WHERE t.tournament_id = ? \
+         GROUP BY t.id, t.player_name \
+         ORDER BY total_points DESC"
+    )
+    .bind(&tournament_id)
+    .bind(&tournament_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Batch-fetch all team golfers for this tournament
+    let team_golfers = sqlx::query_as::<_, TeamGolferRow>(
+        "SELECT tg.team_id, g.id, g.name, g.win_probability_group \
+         FROM team_golfers tg \
+         INNER JOIN golfers g ON tg.golfer_id = g.id \
+         INNER JOIN teams t ON tg.team_id = t.id \
+         WHERE t.tournament_id = ? \
+         ORDER BY g.win_probability_group"
+    )
+    .bind(&tournament_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let mut golfers_by_team: std::collections::HashMap<String, Vec<GolferSummary>> = std::collections::HashMap::new();
+    for row in team_golfers {
+        golfers_by_team.entry(row.team_id).or_default().push(GolferSummary {
+            id: row.id,
+            name: row.name,
+            win_probability_group: row.win_probability_group,
+        });
+    }
+
+    let result: Vec<TournamentTeamLeaderboardEntryWithGolfers> = leaderboard
+        .into_iter()
+        .map(|entry| TournamentTeamLeaderboardEntryWithGolfers {
+            player_name: entry.player_name,
+            team_id: entry.team_id.clone(),
+            total_points: entry.total_points.unwrap_or(0),
+            golfers: golfers_by_team.remove(&entry.team_id).unwrap_or_default(),
+        })
+        .collect();
+
+    Ok(Json(result))
+}
+
+// Tournament stats
+pub async fn get_tournament_stats(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+) -> Result<Json<TournamentStats>, (StatusCode, Json<ApiError>)> {
+    #[derive(sqlx::FromRow)]
+    struct StatsRow {
+        total_holes_played: i64,
+        total_fantasy_points: i64,
+        eagles_or_better: i64,
+        birdies: i64,
+        pars: i64,
+        bogeys_or_worse: i64,
+    }
+
+    let stats = sqlx::query_as::<_, StatsRow>(
+        "SELECT \
+            COUNT(*) as total_holes_played, \
+            COALESCE(SUM(fantasy_points), 0) as total_fantasy_points, \
+            SUM(CASE WHEN score_to_par <= -2 THEN 1 ELSE 0 END) as eagles_or_better, \
+            SUM(CASE WHEN score_to_par = -1 THEN 1 ELSE 0 END) as birdies, \
+            SUM(CASE WHEN score_to_par = 0 THEN 1 ELSE 0 END) as pars, \
+            SUM(CASE WHEN score_to_par >= 1 THEN 1 ELSE 0 END) as bogeys_or_worse \
+         FROM hole_scores WHERE tournament_id = ?"
+    )
+    .bind(&tournament_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    #[derive(sqlx::FromRow)]
+    struct BestRoundRow {
+        golfer_name: String,
+        round_points: i64,
+    }
+
+    let best_round = sqlx::query_as::<_, BestRoundRow>(
+        "SELECT g.name as golfer_name, SUM(hs.fantasy_points) as round_points \
+         FROM hole_scores hs \
+         INNER JOIN golfers g ON hs.golfer_id = g.id \
+         WHERE hs.tournament_id = ? \
+         GROUP BY hs.golfer_id, hs.day \
+         ORDER BY round_points DESC \
+         LIMIT 1"
+    )
+    .bind(&tournament_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(TournamentStats {
+        total_holes_played: stats.total_holes_played,
+        total_fantasy_points: stats.total_fantasy_points,
+        eagles_or_better: stats.eagles_or_better,
+        birdies: stats.birdies,
+        pars: stats.pars,
+        bogeys_or_worse: stats.bogeys_or_worse,
+        best_round_golfer: best_round.as_ref().map(|r| r.golfer_name.clone()),
+        best_round_points: best_round.map(|r| r.round_points),
+    }))
+}

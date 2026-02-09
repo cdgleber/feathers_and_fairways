@@ -85,6 +85,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/leaderboard/:season_id/detailed", get(routes::get_season_leaderboard_with_golfers))
         .route("/api/leaderboard/tournament/:tournament_id", get(routes::get_tournament_leaderboard))
 
+        // Public routes - Completed tournament history
+        .route("/api/tournaments/:season_id/completed", get(routes::get_completed_tournaments))
+        .route("/api/leaderboard/tournament/:tournament_id/teams", get(routes::get_tournament_team_leaderboard))
+        .route("/api/tournaments/:tournament_id/stats", get(routes::get_tournament_stats))
+
         // Admin authentication
         .route("/api/admin/login", post(routes::admin_login))
 

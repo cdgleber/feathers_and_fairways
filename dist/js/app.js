@@ -379,7 +379,8 @@ class FantasyGolfApp {
 
     async createTeam() {
         const playerName = document.getElementById('playerName').value.trim();
-        
+        const playerEmail = document.getElementById('playerEmail')?.value.trim() || null;
+
         if (!playerName) {
             this.showToast('Please enter your name', 'error');
             return;
@@ -421,7 +422,8 @@ class FantasyGolfApp {
                 key_code: this.validatedKey,
                 player_name: playerName,
                 tournament_id: this.selectedTournament,
-                golfer_ids: golferIds
+                golfer_ids: golferIds,
+                email: playerEmail
             };
 
             const response = await fetch(endpoint, {
@@ -1316,12 +1318,21 @@ class FantasyGolfApp {
             <form id="createTeamForm" class="form" style="margin-top: 20px;">
                 <div class="form-group">
                     <label for="playerName" class="form-label">Your Name</label>
-                    <input 
-                        type="text" 
-                        id="playerName" 
-                        class="form-input" 
+                    <input
+                        type="text"
+                        id="playerName"
+                        class="form-input"
                         placeholder="Enter your name"
                         required>
+                </div>
+
+                <div class="form-group">
+                    <label for="playerEmail" class="form-label">Email (optional)</label>
+                    <input
+                        type="email"
+                        id="playerEmail"
+                        class="form-input"
+                        placeholder="Enter your email address">
                 </div>
 
                 <div class="selection-info">

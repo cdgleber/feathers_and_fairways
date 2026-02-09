@@ -75,6 +75,7 @@ pub struct Team {
     pub tournament_id: Option<String>,
     pub player_name: String,
     pub access_key_id: String,
+    pub email: Option<String>,
     pub created_at: Option<String>,
 }
 
@@ -145,6 +146,8 @@ pub struct CreateTeamRequest {
     pub tournament_id: String,
     #[validate(length(min = 6, max = 6))]
     pub golfer_ids: Vec<String>,
+    #[validate(email)]
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Serialize, FromRow)]

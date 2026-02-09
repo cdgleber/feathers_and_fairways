@@ -286,13 +286,14 @@ pub async fn create_team(
     // Create team
     let team_id = new_id();
     sqlx::query(
-        "INSERT INTO teams (id, season_id, tournament_id, player_name, access_key_id) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO teams (id, season_id, tournament_id, player_name, access_key_id, email) VALUES (?, ?, ?, ?, ?, ?)"
     )
     .bind(&team_id)
     .bind(&access_key.season_id)
     .bind(&payload.tournament_id)
     .bind(&payload.player_name)
     .bind(&access_key.id)
+    .bind(&payload.email)
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
@@ -326,7 +327,7 @@ pub async fn create_team(
 
     // Fetch the created team
     let team = sqlx::query_as::<_, Team>(
-        "SELECT id, season_id, tournament_id, player_name, access_key_id, created_at FROM teams WHERE id = ?"
+        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE id = ?"
     )
     .bind(&team_id)
     .fetch_one(&pool)
@@ -354,7 +355,7 @@ pub async fn list_teams(
     Path(season_id): Path<String>,
 ) -> Result<Json<Vec<Team>>, (StatusCode, Json<ApiError>)> {
     let teams = sqlx::query_as::<_, Team>(
-        "SELECT id, season_id, tournament_id, player_name, access_key_id, created_at FROM teams WHERE season_id = ? ORDER BY player_name"
+        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE season_id = ? ORDER BY player_name"
     )
     .bind(&season_id)
     .fetch_all(&pool)
@@ -841,7 +842,7 @@ pub async fn update_team(
 
     // Find existing team
     let team = sqlx::query_as::<_, Team>(
-        "SELECT id, season_id, tournament_id, player_name, access_key_id, created_at FROM teams WHERE access_key_id = ? AND tournament_id = ?"
+        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE access_key_id = ? AND tournament_id = ?"
     )
     .bind(&access_key.id)
     .bind(&payload.tournament_id)

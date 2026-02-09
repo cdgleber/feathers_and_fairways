@@ -98,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/tournaments/:tournament_id/scores/upload", post(routes::upload_tournament_scores))
             .route("/golfers/upload", post(routes::upload_golfers))
             .route("/tournaments/:tournament_id/groups/upload", post(routes::upload_tournament_golfer_groups))
+            .route("/stats", get(routes::get_admin_stats))
             .layer(middleware::from_fn(auth::admin_auth_middleware))
         )
 

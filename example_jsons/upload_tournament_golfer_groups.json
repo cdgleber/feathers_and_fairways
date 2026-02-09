@@ -1,0 +1,16 @@
+{
+  "groups": [
+    { "golfer": "Scottie Scheffler", "group": 1 },
+    { "golfer": "Xander Schauffele", "group": 1 },
+    { "golfer": "Rory McIlroy", "group": 2 },
+    { "golfer": "Jon Rahm", "group": 2 },
+    { "golfer": "Collin Morikawa", "group": 3 },
+    { "golfer": "Viktor Hovland", "group": 3 },
+    { "golfer": "Tommy Fleetwood", "group": 4 },
+    { "golfer": "Shane Lowry", "group": 4 },
+    { "golfer": "Sepp Straka", "group": 5 },
+    { "golfer": "Chris Kirk", "group": 5 },
+    { "golfer": "Nick Taylor", "group": 6 },
+    { "golfer": "Lucas Glover", "group": 6 }
+  ]
+}

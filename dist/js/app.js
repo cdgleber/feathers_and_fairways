@@ -570,6 +570,7 @@ class FantasyGolfApp {
     }
 
     async loadAdminData() {
+        await this.loadAdminStats();
         await this.loadTournaments();
         await this.loadTournamentsForScoreUpload();
         await this.loadTournamentsForGroupUpload();
@@ -1344,6 +1345,64 @@ class FantasyGolfApp {
         });
 
         await this.loadGolfersForSelection();
+    }
+    async loadAdminStats() {
+        try {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/stats`);
+            if (response.ok) {
+                const stats = await response.json();
+                this.displayAdminStats(stats);
+            }
+        } catch (error) {
+            console.error('Error loading admin stats:', error);
+        }
+    }
+
+    displayAdminStats(stats) {
+        const container = document.getElementById('adminStatsContent');
+        if (!container) return;
+
+        const dist = stats.score_distribution;
+        const total = dist.eagles_or_better + dist.birdies + dist.pars + dist.bogeys_or_worse;
+
+        let html = '<div class="admin-stats-grid">';
+        html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_seasons + '</span><span class="admin-stat-label">Seasons</span></div>';
+        html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_tournaments + '</span><span class="admin-stat-label">Tournaments</span></div>';
+        html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_teams + '</span><span class="admin-stat-label">Teams</span></div>';
+        html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_golfers + '</span><span class="admin-stat-label">Active Golfers</span></div>';
+        html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_scores + '</span><span class="admin-stat-label">Hole Scores</span></div>';
+        html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.access_keys_used + ' / ' + stats.access_keys_total + '</span><span class="admin-stat-label">Keys Used</span></div>';
+        html += '</div>';
+
+        if (total > 0) {
+            html += '<h4 style="margin: var(--spacing-lg) 0 var(--spacing-md);">Score Distribution</h4>';
+            html += '<div class="score-dist-grid">';
+            html += '<div class="score-dist-bar"><div class="score-dist-fill score-dist-eagle" style="width: ' + (dist.eagles_or_better / total * 100).toFixed(1) + '%"></div><span class="score-dist-label">Eagles+ (' + dist.eagles_or_better + ')</span></div>';
+            html += '<div class="score-dist-bar"><div class="score-dist-fill score-dist-birdie" style="width: ' + (dist.birdies / total * 100).toFixed(1) + '%"></div><span class="score-dist-label">Birdies (' + dist.birdies + ')</span></div>';
+            html += '<div class="score-dist-bar"><div class="score-dist-fill score-dist-par" style="width: ' + (dist.pars / total * 100).toFixed(1) + '%"></div><span class="score-dist-label">Pars (' + dist.pars + ')</span></div>';
+            html += '<div class="score-dist-bar"><div class="score-dist-fill score-dist-bogey" style="width: ' + (dist.bogeys_or_worse / total * 100).toFixed(1) + '%"></div><span class="score-dist-label">Bogeys+ (' + dist.bogeys_or_worse + ')</span></div>';
+            html += '</div>';
+        }
+
+        if (stats.season_breakdown.length > 0) {
+            html += '<h4 style="margin: var(--spacing-lg) 0 var(--spacing-md);">Season Breakdown</h4>';
+            html += '<div class="leaderboard"><table><thead><tr><th>Season</th><th>Year</th><th>Tournaments</th><th>Teams</th><th>Scores</th></tr></thead><tbody>';
+            stats.season_breakdown.forEach(function(s) {
+                html += '<tr><td>' + s.season_name + '</td><td>' + s.season_year + '</td><td>' + s.tournament_count + '</td><td>' + s.team_count + '</td><td>' + s.score_count + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+
+        if (stats.popular_golfers.length > 0) {
+            html += '<h4 style="margin: var(--spacing-lg) 0 var(--spacing-md);">Most Selected Golfers</h4>';
+            html += '<div class="leaderboard"><table><thead><tr><th>Rank</th><th>Golfer</th><th>Times Selected</th></tr></thead><tbody>';
+            stats.popular_golfers.forEach(function(g, i) {
+                html += '<tr><td><span class="rank rank-' + (i + 1) + '">#' + (i + 1) + '</span></td><td>' + g.golfer_name + '</td><td>' + g.times_selected + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+
+        container.innerHTML = html;
     }
 }
 

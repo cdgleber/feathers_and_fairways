@@ -272,3 +272,42 @@ pub struct TournamentGolferGroupUploadResponse {
     pub total_processed: usize,
     pub errors: Vec<String>,
 }
+
+// Admin Stats
+#[derive(Debug, Serialize)]
+pub struct ScoreDistribution {
+    pub eagles_or_better: i64,
+    pub birdies: i64,
+    pub pars: i64,
+    pub bogeys_or_worse: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct SeasonBreakdown {
+    pub season_name: String,
+    pub season_year: i32,
+    pub tournament_count: i64,
+    pub team_count: i64,
+    pub score_count: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct PopularGolfer {
+    pub golfer_name: String,
+    pub times_selected: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminStats {
+    pub total_seasons: i64,
+    pub total_tournaments: i64,
+    pub total_teams: i64,
+    pub total_golfers: i64,
+    pub total_scores: i64,
+    pub access_keys_total: i64,
+    pub access_keys_used: i64,
+    pub access_keys_unused: i64,
+    pub score_distribution: ScoreDistribution,
+    pub season_breakdown: Vec<SeasonBreakdown>,
+    pub popular_golfers: Vec<PopularGolfer>,
+}

@@ -1023,3 +1023,100 @@ pub async fn upload_tournament_scores(
         errors,
     }))
 }
+
+// Admin stats
+pub async fn get_admin_stats(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<AdminStats>, (StatusCode, Json<ApiError>)> {
+    #[derive(sqlx::FromRow)]
+    struct CountRow { count: i64 }
+
+    let total_seasons = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM seasons")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let total_tournaments = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM tournaments")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let total_teams = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM teams")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let total_golfers = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM golfers WHERE is_active = 1")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let total_scores = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM hole_scores")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let keys_total = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM access_keys")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let keys_used = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM access_keys WHERE is_used = 1")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Score distribution
+    let eagles = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM hole_scores WHERE score_to_par <= -2")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let birdies = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM hole_scores WHERE score_to_par = -1")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let pars = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM hole_scores WHERE score_to_par = 0")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let bogeys = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM hole_scores WHERE score_to_par >= 1")
+        .fetch_one(&pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let score_distribution = ScoreDistribution {
+        eagles_or_better: eagles.count,
+        birdies: birdies.count,
+        pars: pars.count,
+        bogeys_or_worse: bogeys.count,
+    };
+
+    // Season breakdown
+    let season_breakdown = sqlx::query_as::<_, SeasonBreakdown>(
+        "SELECT s.name as season_name, s.year as season_year, \
+         (SELECT COUNT(*) FROM tournaments t WHERE t.season_id = s.id) as tournament_count, \
+         (SELECT COUNT(*) FROM teams tm WHERE tm.season_id = s.id) as team_count, \
+         (SELECT COUNT(*) FROM hole_scores hs INNER JOIN tournaments t ON hs.tournament_id = t.id WHERE t.season_id = s.id) as score_count \
+         FROM seasons s ORDER BY s.year DESC"
+    )
+    .fetch_all(&pool).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Popular golfers (top 10 most selected)
+    let popular_golfers = sqlx::query_as::<_, PopularGolfer>(
+        "SELECT g.name as golfer_name, COUNT(tg.id) as times_selected \
+         FROM golfers g \
+         INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
+         GROUP BY g.id, g.name \
+         ORDER BY times_selected DESC \
+         LIMIT 10"
+    )
+    .fetch_all(&pool).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(AdminStats {
+        total_seasons: total_seasons.count,
+        total_tournaments: total_tournaments.count,
+        total_teams: total_teams.count,
+        total_golfers: total_golfers.count,
+        total_scores: total_scores.count,
+        access_keys_total: keys_total.count,
+        access_keys_used: keys_used.count,
+        access_keys_unused: keys_total.count - keys_used.count,
+        score_distribution,
+        season_breakdown,
+        popular_golfers,
+    }))
+}

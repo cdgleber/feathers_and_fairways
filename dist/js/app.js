@@ -1225,13 +1225,23 @@ class FantasyGolfApp {
             throw new Error('Not authenticated');
         }
 
-        return fetch(url, {
+        const response = await fetch(url, {
             ...options,
             headers: {
                 ...options.headers,
                 'Authorization': `Bearer ${this.adminToken}`,
             }
         });
+
+        if (response.status === 401) {
+            this.adminToken = null;
+            localStorage.removeItem('adminToken');
+            this.showToast('Session expired. Please log in again.', 'error');
+            this.checkAdminAuth();
+            throw new Error('Session expired');
+        }
+
+        return response;
     }
 
     async loadTournamentsForSelection() {

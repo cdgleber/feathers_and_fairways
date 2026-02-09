@@ -5,37 +5,47 @@ use axum::{
     response::Response,
 };
 use base64::{Engine as _, engine::general_purpose};
+use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
+
+fn get_admin_password() -> String {
+    std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "admin123".to_string())
+}
 
 pub async fn admin_auth_middleware(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let admin_password = std::env::var("ADMIN_PASSWORD")
-        .unwrap_or_else(|_| "admin123".to_string());
-    tracing::info!("ADMIN PASSWORD IS {admin_password}");
+    let admin_password = get_admin_password();
 
-    // Check for Authorization header
     let auth_header = request
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok());
 
-    // tracing::info!("Header is {auth_header:?}");
-
     if let Some(auth) = auth_header {
-        // Support both "Bearer token" and "Basic base64" formats
         if auth.starts_with("Bearer ") {
             let token = &auth[7..];
-            if token == admin_password {
-                return Ok(next.run(request).await);
+            // Validate JWT token
+            let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+            let key = DecodingKey::from_secret(admin_password.as_bytes());
+            match decode::<Claims>(token, &key, &validation) {
+                Ok(_) => return Ok(next.run(request).await),
+                Err(e) => {
+                    tracing::debug!("JWT validation failed: {e}");
+                }
             }
         } else if auth.starts_with("Basic ") {
             let encoded = &auth[6..];
             if let Ok(decoded) = general_purpose::STANDARD.decode(encoded) {
                 if let Ok(credentials) = String::from_utf8(decoded) {
-                    // Format is "username:password", we only care about password
                     if let Some((_, password)) = credentials.split_once(':') {
-                        // tracing::info!("AUTH ATTEMPT: {password} against {admin_password}");
                         if password == admin_password {
                             return Ok(next.run(request).await);
                         }
@@ -49,13 +59,26 @@ pub async fn admin_auth_middleware(
 }
 
 pub fn verify_admin_password(password: &str) -> bool {
-    let admin_password = std::env::var("ADMIN_PASSWORD")
-        .unwrap_or_else(|_| "admin123".to_string());
+    let admin_password = get_admin_password();
     password == admin_password
 }
 
 pub fn generate_admin_token() -> String {
-    let admin_password = std::env::var("ADMIN_PASSWORD")
-        .unwrap_or_else(|_| "admin123".to_string());
-    admin_password
+    let admin_password = get_admin_password();
+    let expiration = chrono::Utc::now()
+        .checked_add_signed(chrono::Duration::minutes(60))
+        .expect("valid timestamp")
+        .timestamp() as usize;
+
+    let claims = Claims {
+        sub: "admin".to_string(),
+        exp: expiration,
+    };
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(admin_password.as_bytes()),
+    )
+    .expect("JWT encoding should not fail")
 }

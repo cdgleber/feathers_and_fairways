@@ -1015,6 +1015,20 @@ body,
     z-index: 1;
 }
 
+/* History View Selectors */
+.history-selectors {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+@media (max-width: 768px) {
+    .history-selectors {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Tournament Stats */
 .tournament-stats-grid {
     display: grid;

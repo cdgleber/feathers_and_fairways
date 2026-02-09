@@ -20,7 +20,7 @@ pub async fn admin_auth_middleware(
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok());
 
-    tracing::info!("Header is {auth_header:?}");
+    // tracing::info!("Header is {auth_header:?}");
 
     if let Some(auth) = auth_header {
         // Support both "Bearer token" and "Basic base64" formats
@@ -35,7 +35,7 @@ pub async fn admin_auth_middleware(
                 if let Ok(credentials) = String::from_utf8(decoded) {
                     // Format is "username:password", we only care about password
                     if let Some((_, password)) = credentials.split_once(':') {
-                        tracing::info!("AUTH ATTEMPT: {password} against {admin_password}");
+                        // tracing::info!("AUTH ATTEMPT: {password} against {admin_password}");
                         if password == admin_password {
                             return Ok(next.run(request).await);
                         }

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Feathers and Fairways</title>
     <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" type="image/x-icon" href="/favicons/favicon-32x32.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -30,6 +31,10 @@
                 <button class="nav-btn" data-view="leaderboard">
                     <span class="material-icons">leaderboard</span>
                     <span>Leaderboard</span>
+                </button>
+                <button class="nav-btn" data-view="history">
+                    <span class="material-icons">history</span>
+                    <span>History</span>
                 </button>
                 <button class="nav-btn" data-view="admin" id="adminBtn">
                     <span class="material-icons">admin_panel_settings</span>
@@ -58,6 +63,10 @@
         <button class="mobile-nav-btn" data-view="leaderboard">
             <span class="material-icons">leaderboard</span>
             <span>Leaderboard</span>
+        </button>
+        <button class="mobile-nav-btn" data-view="history">
+            <span class="material-icons">history</span>
+            <span>History</span>
         </button>
         <button class="mobile-nav-btn" data-view="admin">
             <span class="material-icons">admin_panel_settings</span>
@@ -156,7 +165,6 @@
                 <div class="tabs">
                     <button class="tab active" data-tab="season">Season Standings</button>
                     <button class="tab" data-tab="tournament">Tournament Scores</button>
-                    <button class="tab" data-tab="history">Completed Tournaments</button>
                 </div>
 
                 <div class="tab-content">
@@ -176,28 +184,46 @@
                         </div>
                     </div>
 
-                    <div id="historyTab" class="tab-pane">
-                        <div class="form-group">
-                            <label for="completedTournamentSelect" class="form-label">Select Completed Tournament</label>
-                            <select id="completedTournamentSelect" class="form-input">
-                                <option value="">Select a tournament</option>
-                            </select>
-                        </div>
-                        <div id="tournamentStatsSection" class="card hidden">
-                            <h3 class="card-title">
-                                <span class="material-icons">bar_chart</span>
-                                Tournament Stats
-                            </h3>
-                            <div id="tournamentStatsContent"></div>
-                        </div>
-                        <div id="tournamentTeamLeaderboardSection" class="card hidden">
-                            <h3 class="card-title">
-                                <span class="material-icons">groups</span>
-                                Team Standings
-                            </h3>
-                            <div id="tournamentTeamLeaderboard" class="leaderboard"></div>
-                        </div>
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div id="historyView" class="view">
+                <h2 class="page-title">Tournament History</h2>
+
+                <div class="history-selectors">
+                    <div class="form-group">
+                        <label for="historySeasonSelect" class="form-label">Season</label>
+                        <select id="historySeasonSelect" class="form-input">
+                            <option value="">Loading seasons...</option>
+                        </select>
                     </div>
+                    <div class="form-group">
+                        <label for="historyTournamentSelect" class="form-label">Tournament</label>
+                        <select id="historyTournamentSelect" class="form-input">
+                            <option value="">Select a tournament</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="historyEmptyState" class="card hidden">
+                    <p class="loading" id="historyEmptyMessage">No completed tournaments available.</p>
+                </div>
+
+                <div id="historyStatsSection" class="card hidden">
+                    <h3 class="card-title">
+                        <span class="material-icons">bar_chart</span>
+                        Tournament Stats
+                    </h3>
+                    <div id="historyStatsContent"></div>
+                </div>
+
+                <div id="historyLeaderboardSection" class="card hidden">
+                    <h3 class="card-title">
+                        <span class="material-icons">groups</span>
+                        Team Standings
+                    </h3>
+                    <div id="historyLeaderboard" class="leaderboard"></div>
                 </div>
             </div>
 

@@ -8,6 +8,7 @@ class FantasyGolfApp {
         this.validatedKey = null;
         this.adminToken = localStorage.getItem('adminToken');
         this.selectedTournament = null;
+        this.allSeasons = [];
         this.init();
     }
 
@@ -106,10 +107,17 @@ class FantasyGolfApp {
             }
         });
 
-        // Completed tournament select
-        document.getElementById('completedTournamentSelect')?.addEventListener('change', (e) => {
+        // History view selects
+        document.getElementById('historySeasonSelect')?.addEventListener('change', (e) => {
             if (e.target.value) {
-                this.loadCompletedTournamentData(e.target.value);
+                this.loadHistoryTournaments(e.target.value);
+            }
+        });
+        document.getElementById('historyTournamentSelect')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.loadHistoryTournamentData(e.target.value);
+            } else {
+                this.hideHistoryData();
             }
         });
 
@@ -166,6 +174,8 @@ class FantasyGolfApp {
             // Load data for specific views
             if (viewName === 'leaderboard') {
                 this.loadLeaderboards();
+            } else if (viewName === 'history') {
+                this.loadHistoryView();
             } else if (viewName === 'admin' && this.adminToken) {
                 this.loadAdminData();
             }
@@ -181,8 +191,6 @@ class FantasyGolfApp {
 
         if (tabName === 'tournament') {
             this.loadTournaments();
-        } else if (tabName === 'history') {
-            this.loadCompletedTournaments();
         }
     }
 
@@ -1425,30 +1433,69 @@ class FantasyGolfApp {
         container.innerHTML = html;
     }
 
-    async loadCompletedTournaments() {
-        if (!this.currentSeason) return;
+    // History view methods
+    async loadHistoryView() {
+        await this.loadAllSeasons();
 
+        if (this.allSeasons.length === 0) {
+            this.hideHistoryData();
+            document.getElementById('historyEmptyState').classList.remove('hidden');
+            document.getElementById('historyEmptyMessage').textContent = 'No seasons available.';
+            document.getElementById('historySeasonSelect').innerHTML = '<option value="">No seasons</option>';
+            document.getElementById('historyTournamentSelect').innerHTML = '<option value="">No tournaments</option>';
+            return;
+        }
+
+        const mostRecent = this.allSeasons[0];
+        this.populateHistorySeasonSelect(mostRecent.id);
+        await this.loadHistoryTournaments(mostRecent.id);
+    }
+
+    async loadAllSeasons() {
         try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}/completed`);
+            const response = await fetch(`${API_BASE}/seasons`);
+            if (response.ok) {
+                this.allSeasons = await response.json();
+            }
+        } catch (error) {
+            console.error('Error loading seasons:', error);
+        }
+    }
+
+    populateHistorySeasonSelect(selectedId) {
+        const select = document.getElementById('historySeasonSelect');
+        select.innerHTML = this.allSeasons.map(s =>
+            '<option value="' + s.id + '"' + (s.id === selectedId ? ' selected' : '') + '>' + s.name + ' (' + s.year + ')</option>'
+        ).join('');
+    }
+
+    async loadHistoryTournaments(seasonId) {
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${seasonId}/completed`);
             if (response.ok) {
                 const tournaments = await response.json();
-                const select = document.getElementById('completedTournamentSelect');
+                const select = document.getElementById('historyTournamentSelect');
 
-                let options = '<option value="">Select a completed tournament</option>';
-                tournaments.forEach(t => {
-                    options += '<option value="' + t.id + '">' + t.name + ' (' + this.formatDate(t.start_date) + ' - ' + this.formatDate(t.end_date) + ')</option>';
-                });
-                select.innerHTML = options;
+                if (tournaments.length === 0) {
+                    select.innerHTML = '<option value="">No completed tournaments</option>';
+                    this.hideHistoryData();
+                    document.getElementById('historyEmptyState').classList.remove('hidden');
+                    document.getElementById('historyEmptyMessage').textContent = 'No completed tournaments for this season.';
+                    return;
+                }
 
-                document.getElementById('tournamentStatsSection')?.classList.add('hidden');
-                document.getElementById('tournamentTeamLeaderboardSection')?.classList.add('hidden');
+                select.innerHTML = tournaments.map((t, i) =>
+                    '<option value="' + t.id + '"' + (i === 0 ? ' selected' : '') + '>' + t.name + ' (' + this.formatDate(t.start_date) + ' - ' + this.formatDate(t.end_date) + ')</option>'
+                ).join('');
+
+                await this.loadHistoryTournamentData(tournaments[0].id);
             }
         } catch (error) {
             console.error('Error loading completed tournaments:', error);
         }
     }
 
-    async loadCompletedTournamentData(tournamentId) {
+    async loadHistoryTournamentData(tournamentId) {
         this.showLoading();
         try {
             const [statsRes, leaderboardRes] = await Promise.all([
@@ -1456,14 +1503,16 @@ class FantasyGolfApp {
                 fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}/teams`)
             ]);
 
+            document.getElementById('historyEmptyState').classList.add('hidden');
+
             if (statsRes.ok) {
                 const stats = await statsRes.json();
-                this.displayTournamentStatsCard(stats);
+                this.displayHistoryStats(stats);
             }
 
             if (leaderboardRes.ok) {
                 const leaderboard = await leaderboardRes.json();
-                this.displayTournamentTeamLeaderboard(leaderboard);
+                this.displayHistoryLeaderboard(leaderboard);
             }
         } catch (error) {
             this.showToast('Error loading tournament data', 'error');
@@ -1473,9 +1522,9 @@ class FantasyGolfApp {
         }
     }
 
-    displayTournamentStatsCard(stats) {
-        const section = document.getElementById('tournamentStatsSection');
-        const container = document.getElementById('tournamentStatsContent');
+    displayHistoryStats(stats) {
+        const section = document.getElementById('historyStatsSection');
+        const container = document.getElementById('historyStatsContent');
         section.classList.remove('hidden');
 
         let html = '<div class="tournament-stats-grid">';
@@ -1494,9 +1543,9 @@ class FantasyGolfApp {
         container.innerHTML = html;
     }
 
-    displayTournamentTeamLeaderboard(leaderboard) {
-        const section = document.getElementById('tournamentTeamLeaderboardSection');
-        const container = document.getElementById('tournamentTeamLeaderboard');
+    displayHistoryLeaderboard(leaderboard) {
+        const section = document.getElementById('historyLeaderboardSection');
+        const container = document.getElementById('historyLeaderboard');
         section.classList.remove('hidden');
 
         if (leaderboard.length === 0) {
@@ -1515,6 +1564,12 @@ class FantasyGolfApp {
         html += '</tbody></table>';
 
         container.innerHTML = html;
+    }
+
+    hideHistoryData() {
+        document.getElementById('historyStatsSection')?.classList.add('hidden');
+        document.getElementById('historyLeaderboardSection')?.classList.add('hidden');
+        document.getElementById('historyEmptyState')?.classList.remove('hidden');
     }
 }
 

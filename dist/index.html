@@ -156,6 +156,7 @@
                 <div class="tabs">
                     <button class="tab active" data-tab="season">Season Standings</button>
                     <button class="tab" data-tab="tournament">Tournament Scores</button>
+                    <button class="tab" data-tab="history">Completed Tournaments</button>
                 </div>
 
                 <div class="tab-content">
@@ -172,6 +173,29 @@
                         </div>
                         <div class="card">
                             <div id="tournamentLeaderboard" class="leaderboard"></div>
+                        </div>
+                    </div>
+
+                    <div id="historyTab" class="tab-pane">
+                        <div class="form-group">
+                            <label for="completedTournamentSelect" class="form-label">Select Completed Tournament</label>
+                            <select id="completedTournamentSelect" class="form-input">
+                                <option value="">Select a tournament</option>
+                            </select>
+                        </div>
+                        <div id="tournamentStatsSection" class="card hidden">
+                            <h3 class="card-title">
+                                <span class="material-icons">bar_chart</span>
+                                Tournament Stats
+                            </h3>
+                            <div id="tournamentStatsContent"></div>
+                        </div>
+                        <div id="tournamentTeamLeaderboardSection" class="card hidden">
+                            <h3 class="card-title">
+                                <span class="material-icons">groups</span>
+                                Team Standings
+                            </h3>
+                            <div id="tournamentTeamLeaderboard" class="leaderboard"></div>
                         </div>
                     </div>
                 </div>

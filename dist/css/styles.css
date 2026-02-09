@@ -1014,3 +1014,33 @@ body,
     color: var(--text-primary);
     z-index: 1;
 }
+
+/* Tournament Stats */
+.tournament-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.stat-item-compact {
+    text-align: center;
+    padding: var(--spacing-md);
+    background: var(--surface-variant);
+    border-radius: var(--radius-md);
+}
+
+.stat-item-value {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.stat-item-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: var(--spacing-xs);
+}

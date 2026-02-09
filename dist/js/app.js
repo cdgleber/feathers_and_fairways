@@ -106,6 +106,13 @@ class FantasyGolfApp {
             }
         });
 
+        // Completed tournament select
+        document.getElementById('completedTournamentSelect')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.loadCompletedTournamentData(e.target.value);
+            }
+        });
+
         // Score file input
         document.getElementById('scoreFileInput')?.addEventListener('change', (e) => {
             this.previewScoreFile(e);
@@ -174,6 +181,8 @@ class FantasyGolfApp {
 
         if (tabName === 'tournament') {
             this.loadTournaments();
+        } else if (tabName === 'history') {
+            this.loadCompletedTournaments();
         }
     }
 
@@ -1412,6 +1421,98 @@ class FantasyGolfApp {
             });
             html += '</tbody></table></div>';
         }
+
+        container.innerHTML = html;
+    }
+
+    async loadCompletedTournaments() {
+        if (!this.currentSeason) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}/completed`);
+            if (response.ok) {
+                const tournaments = await response.json();
+                const select = document.getElementById('completedTournamentSelect');
+
+                let options = '<option value="">Select a completed tournament</option>';
+                tournaments.forEach(t => {
+                    options += '<option value="' + t.id + '">' + t.name + ' (' + this.formatDate(t.start_date) + ' - ' + this.formatDate(t.end_date) + ')</option>';
+                });
+                select.innerHTML = options;
+
+                document.getElementById('tournamentStatsSection')?.classList.add('hidden');
+                document.getElementById('tournamentTeamLeaderboardSection')?.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error('Error loading completed tournaments:', error);
+        }
+    }
+
+    async loadCompletedTournamentData(tournamentId) {
+        this.showLoading();
+        try {
+            const [statsRes, leaderboardRes] = await Promise.all([
+                fetch(`${API_BASE}/tournaments/${tournamentId}/stats`),
+                fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}/teams`)
+            ]);
+
+            if (statsRes.ok) {
+                const stats = await statsRes.json();
+                this.displayTournamentStatsCard(stats);
+            }
+
+            if (leaderboardRes.ok) {
+                const leaderboard = await leaderboardRes.json();
+                this.displayTournamentTeamLeaderboard(leaderboard);
+            }
+        } catch (error) {
+            this.showToast('Error loading tournament data', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    displayTournamentStatsCard(stats) {
+        const section = document.getElementById('tournamentStatsSection');
+        const container = document.getElementById('tournamentStatsContent');
+        section.classList.remove('hidden');
+
+        let html = '<div class="tournament-stats-grid">';
+        html += '<div class="stat-item-compact"><span class="stat-item-value">' + stats.total_holes_played + '</span><span class="stat-item-label">Holes Played</span></div>';
+        html += '<div class="stat-item-compact"><span class="stat-item-value">' + stats.total_fantasy_points + '</span><span class="stat-item-label">Total Fantasy Points</span></div>';
+        html += '<div class="stat-item-compact"><span class="stat-item-value">' + stats.eagles_or_better + '</span><span class="stat-item-label">Eagles+</span></div>';
+        html += '<div class="stat-item-compact"><span class="stat-item-value">' + stats.birdies + '</span><span class="stat-item-label">Birdies</span></div>';
+        html += '<div class="stat-item-compact"><span class="stat-item-value">' + stats.pars + '</span><span class="stat-item-label">Pars</span></div>';
+        html += '<div class="stat-item-compact"><span class="stat-item-value">' + stats.bogeys_or_worse + '</span><span class="stat-item-label">Bogeys+</span></div>';
+        html += '</div>';
+
+        if (stats.best_round_golfer) {
+            html += '<p style="margin-top: var(--spacing-md); color: var(--text-secondary);">Best Round: <strong>' + stats.best_round_golfer + '</strong> (' + stats.best_round_points + ' pts)</p>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    displayTournamentTeamLeaderboard(leaderboard) {
+        const section = document.getElementById('tournamentTeamLeaderboardSection');
+        const container = document.getElementById('tournamentTeamLeaderboard');
+        section.classList.remove('hidden');
+
+        if (leaderboard.length === 0) {
+            container.innerHTML = '<p class="loading">No teams found for this tournament.</p>';
+            return;
+        }
+
+        let html = '<table><thead><tr><th>Rank</th><th>Player</th><th>Golfers</th><th>Points</th></tr></thead><tbody>';
+        leaderboard.forEach(function(entry, index) {
+            const golferNames = entry.golfers.map(function(g) { return g.name; }).join(', ');
+            html += '<tr><td><span class="rank rank-' + (index + 1) + '">#' + (index + 1) + '</span></td>';
+            html += '<td>' + entry.player_name + '</td>';
+            html += '<td><span class="golfer-names">' + golferNames + '</span></td>';
+            html += '<td><span class="points">' + entry.total_points + '</span></td></tr>';
+        });
+        html += '</tbody></table>';
 
         container.innerHTML = html;
     }

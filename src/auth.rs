@@ -14,15 +14,17 @@ struct Claims {
     exp: usize,
 }
 
-fn get_admin_password() -> String {
-    std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "admin123".to_string())
+fn get_admin_password() -> Result<String, ()> {
+    std::env::var("ADMIN_PASSWORD").map_err(|_| {
+        tracing::error!("ADMIN_PASSWORD environment variable is not set");
+    })
 }
 
 pub async fn admin_auth_middleware(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let admin_password = get_admin_password();
+    let admin_password = get_admin_password().map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     let auth_header = request
         .headers()
@@ -32,7 +34,6 @@ pub async fn admin_auth_middleware(
     if let Some(auth) = auth_header {
         if auth.starts_with("Bearer ") {
             let token = &auth[7..];
-            // Validate JWT token
             let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
             let key = DecodingKey::from_secret(admin_password.as_bytes());
             match decode::<Claims>(token, &key, &validation) {
@@ -58,13 +59,13 @@ pub async fn admin_auth_middleware(
     Err(StatusCode::UNAUTHORIZED)
 }
 
-pub fn verify_admin_password(password: &str) -> bool {
-    let admin_password = get_admin_password();
-    password == admin_password
+pub fn verify_admin_password(password: &str) -> Result<bool, ()> {
+    let admin_password = get_admin_password()?;
+    Ok(password == admin_password)
 }
 
-pub fn generate_admin_token() -> String {
-    let admin_password = get_admin_password();
+pub fn generate_admin_token() -> Result<String, ()> {
+    let admin_password = get_admin_password()?;
     let expiration = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::minutes(60))
         .expect("valid timestamp")
@@ -75,10 +76,10 @@ pub fn generate_admin_token() -> String {
         exp: expiration,
     };
 
-    encode(
+    Ok(encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(admin_password.as_bytes()),
     )
-    .expect("JWT encoding should not fail")
+    .expect("JWT encoding should not fail"))
 }

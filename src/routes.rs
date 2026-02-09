@@ -776,10 +776,15 @@ pub async fn upload_tournament_golfer_groups(
 pub async fn admin_login(
     Json(payload): Json<AdminLoginRequest>,
 ) -> Result<Json<AdminLoginResponse>, (StatusCode, Json<ApiError>)> {
-    if verify_admin_password(&payload.password) {
+    let password_valid = verify_admin_password(&payload.password)
+        .map_err(|_| (StatusCode::UNAUTHORIZED, Json(ApiError::new("Admin authentication is not configured"))))?;
+
+    if password_valid {
+        let token = generate_admin_token()
+            .map_err(|_| (StatusCode::UNAUTHORIZED, Json(ApiError::new("Admin authentication is not configured"))))?;
         Ok(Json(AdminLoginResponse {
             success: true,
-            token: Some(generate_admin_token()),
+            token: Some(token),
         }))
     } else {
         Ok(Json(AdminLoginResponse {

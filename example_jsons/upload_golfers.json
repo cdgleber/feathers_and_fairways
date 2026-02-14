@@ -11,6 +11,12 @@
     { "name": "Sepp Straka", "group": 5 },
     { "name": "Chris Kirk", "group": 5 },
     { "name": "Nick Taylor", "group": 6 },
-    { "name": "Lucas Glover", "group": 6 }
+    { "name": "Lucas Glover", "group": 6 },
+    { "name": "Davis Thompson", "group": 7 },
+    { "name": "Ben Griffin", "group": 7 },
+    { "name": "Nick Dunlap", "group": 8, "amateur": true },
+    { "name": "Sam Bennett", "group": 8, "amateur": true },
+    { "name": "Luke Clanton", "group": 9, "amateur": true },
+    { "name": "Miles Russell", "group": 9, "amateur": true }
   ]
 }

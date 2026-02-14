@@ -14,12 +14,12 @@ fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-fn calculate_fantasy_points(score_to_par: i32) -> i32 {
+fn calculate_fantasy_points(score_to_par: i32, is_amateur: bool) -> i32 {
     match score_to_par {
         s if s <= -2 => 2,  // Eagle or better
         -1 => 1,            // Birdie
         0 => 0,             // Par
-        _ => -1,            // Bogey or worse
+        _ => if is_amateur { 0 } else { -1 },  // Bogey or worse (amateurs get 0)
     }
 }
 
@@ -165,18 +165,20 @@ pub async fn create_golfer(
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
 
     let id = new_id();
+    let is_amateur = payload.is_amateur.unwrap_or(false);
     sqlx::query(
-        "INSERT INTO golfers (id, name, win_probability_group) VALUES (?, ?, ?)"
+        "INSERT INTO golfers (id, name, win_probability_group, is_amateur) VALUES (?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&payload.name)
     .bind(payload.win_probability_group)
+    .bind(is_amateur)
     .execute(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     let golfer = sqlx::query_as::<_, Golfer>(
-        "SELECT id, name, win_probability_group, is_active, created_at FROM golfers WHERE id = ?"
+        "SELECT id, name, win_probability_group, is_amateur, is_active, created_at FROM golfers WHERE id = ?"
     )
     .bind(&id)
     .fetch_one(&pool)
@@ -190,7 +192,7 @@ pub async fn list_golfers(
     State(pool): State<SqlitePool>,
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT id, name, win_probability_group, is_active, created_at FROM golfers WHERE is_active = 1 ORDER BY win_probability_group, name"
+        "SELECT id, name, win_probability_group, is_amateur, is_active, created_at FROM golfers WHERE is_active = 1 ORDER BY win_probability_group, name"
     )
     .fetch_all(&pool)
     .await
@@ -206,7 +208,7 @@ pub async fn list_golfers_for_tournament(
     let golfers = sqlx::query_as::<_, Golfer>(
         "SELECT g.id, g.name, \
          COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-         g.is_active, g.created_at \
+         g.is_amateur, g.is_active, g.created_at \
          FROM golfers g \
          LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
          WHERE g.is_active = 1 \
@@ -252,7 +254,7 @@ pub async fn create_team(
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
              COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_active, g.created_at \
+             g.is_amateur, g.is_active, g.created_at \
              FROM golfers g \
              LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
@@ -272,10 +274,10 @@ pub async fn create_team(
         }
     }
 
-    if groups_used.len() != 6 {
+    if groups_used.len() != 9 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new("Must select exactly one golfer from each of the 6 groups")),
+            Json(ApiError::new("Must select exactly one golfer from each of the 9 groups")),
         ));
     }
 
@@ -336,7 +338,7 @@ pub async fn create_team(
 
     // Fetch team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -370,7 +372,7 @@ pub async fn get_team_golfers(
     Path(team_id): Path<String>,
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -450,7 +452,18 @@ pub async fn add_hole_scores(
         score_input.validate()
             .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
 
-        let fantasy_points = calculate_fantasy_points(score_input.score_to_par);
+        #[derive(sqlx::FromRow)]
+        struct AmateurRow { is_amateur: bool }
+        let golfer_row = sqlx::query_as::<_, AmateurRow>(
+            "SELECT is_amateur FROM golfers WHERE id = ?"
+        )
+        .bind(&score_input.golfer_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+        .ok_or((StatusCode::BAD_REQUEST, Json(ApiError::new("Golfer not found"))))?;
+
+        let fantasy_points = calculate_fantasy_points(score_input.score_to_par, golfer_row.is_amateur);
         let id = new_id();
 
         sqlx::query(
@@ -558,7 +571,7 @@ pub async fn get_season_leaderboard_with_golfers(
 
     // Batch-fetch all team golfers for this season
     let team_golfers = sqlx::query_as::<_, TeamGolferRow>(
-        "SELECT tg.team_id, g.id, g.name, g.win_probability_group \
+        "SELECT tg.team_id, g.id, g.name, g.win_probability_group, g.is_amateur \
          FROM team_golfers tg \
          INNER JOIN golfers g ON tg.golfer_id = g.id \
          INNER JOIN teams t ON tg.team_id = t.id \
@@ -577,6 +590,7 @@ pub async fn get_season_leaderboard_with_golfers(
             id: row.id,
             name: row.name,
             win_probability_group: row.win_probability_group,
+            is_amateur: row.is_amateur,
         });
     }
 
@@ -634,8 +648,8 @@ pub async fn upload_golfers(
     let mut errors: Vec<String> = Vec::new();
 
     for entry in &payload.golfers {
-        if entry.group < 1 || entry.group > 6 {
-            errors.push(format!("{}: group must be between 1 and 6", entry.name));
+        if entry.group < 1 || entry.group > 9 {
+            errors.push(format!("{}: group must be between 1 and 9", entry.name));
             continue;
         }
 
@@ -658,12 +672,15 @@ pub async fn upload_golfers(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
+        let is_amateur = entry.amateur.unwrap_or(false);
+
         if let Some(row) = existing {
             // Update existing golfer (avoids case-sensitivity mismatch with ON CONFLICT)
             sqlx::query(
-                "UPDATE golfers SET win_probability_group = ?, is_active = 1 WHERE id = ?"
+                "UPDATE golfers SET win_probability_group = ?, is_amateur = ?, is_active = 1 WHERE id = ?"
             )
             .bind(entry.group)
+            .bind(is_amateur)
             .bind(&row.id)
             .execute(&pool)
             .await
@@ -674,11 +691,12 @@ pub async fn upload_golfers(
             // Insert new golfer
             let id = new_id();
             sqlx::query(
-                "INSERT INTO golfers (id, name, win_probability_group) VALUES (?, ?, ?)"
+                "INSERT INTO golfers (id, name, win_probability_group, is_amateur) VALUES (?, ?, ?, ?)"
             )
             .bind(&id)
             .bind(entry.name.trim())
             .bind(entry.group)
+            .bind(is_amateur)
             .execute(&pool)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
@@ -721,8 +739,8 @@ pub async fn upload_tournament_golfer_groups(
     let mut errors: Vec<String> = Vec::new();
 
     for entry in &payload.groups {
-        if entry.group < 1 || entry.group > 6 {
-            errors.push(format!("{}: group must be between 1 and 6", entry.golfer));
+        if entry.group < 1 || entry.group > 9 {
+            errors.push(format!("{}: group must be between 1 and 9", entry.golfer));
             continue;
         }
 
@@ -863,7 +881,7 @@ pub async fn update_team(
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
              COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_active, g.created_at \
+             g.is_amateur, g.is_active, g.created_at \
              FROM golfers g \
              LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
@@ -883,10 +901,10 @@ pub async fn update_team(
         }
     }
 
-    if groups_used.len() != 6 {
+    if groups_used.len() != 9 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new("Must select exactly one golfer from each of the 6 groups")),
+            Json(ApiError::new("Must select exactly one golfer from each of the 9 groups")),
         ));
     }
 
@@ -918,7 +936,7 @@ pub async fn update_team(
 
     // Fetch updated team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -975,7 +993,7 @@ pub async fn admin_update_team_golfers(
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
              COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_active, g.created_at \
+             g.is_amateur, g.is_active, g.created_at \
              FROM golfers g \
              LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
@@ -995,10 +1013,10 @@ pub async fn admin_update_team_golfers(
         }
     }
 
-    if groups_used.len() != 6 {
+    if groups_used.len() != 9 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new("Must select exactly one golfer from each of the 6 groups")),
+            Json(ApiError::new("Must select exactly one golfer from each of the 9 groups")),
         ));
     }
 
@@ -1028,7 +1046,7 @@ pub async fn admin_update_team_golfers(
 
     // Fetch updated team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -1086,18 +1104,19 @@ pub async fn upload_tournament_scores(
         #[derive(sqlx::FromRow)]
         struct GolferIdRow {
             id: String,
+            is_amateur: bool,
         }
 
         let golfer = sqlx::query_as::<_, GolferIdRow>(
-            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
+            "SELECT id, is_amateur FROM golfers WHERE LOWER(name) = LOWER(?)"
         )
         .bind(&entry.golfer)
         .fetch_optional(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
-        let golfer_id = match golfer {
-            Some(g) => g.id,
+        let (golfer_id, is_amateur) = match golfer {
+            Some(g) => (g.id, g.is_amateur),
             None => {
                 errors.push(format!("{}: golfer not found", entry.golfer));
                 continue;
@@ -1109,7 +1128,7 @@ pub async fn upload_tournament_scores(
             let hole_num = (hole_index + 1) as i32;
             let par = payload.pars[hole_index];
             let score_to_par = strokes - par;
-            let fantasy_points = calculate_fantasy_points(score_to_par);
+            let fantasy_points = calculate_fantasy_points(score_to_par, is_amateur);
             let id = new_id();
 
             sqlx::query(
@@ -1280,7 +1299,7 @@ pub async fn get_tournament_team_leaderboard(
 
     // Batch-fetch all team golfers for this tournament
     let team_golfers = sqlx::query_as::<_, TeamGolferRow>(
-        "SELECT tg.team_id, g.id, g.name, g.win_probability_group \
+        "SELECT tg.team_id, g.id, g.name, g.win_probability_group, g.is_amateur \
          FROM team_golfers tg \
          INNER JOIN golfers g ON tg.golfer_id = g.id \
          INNER JOIN teams t ON tg.team_id = t.id \
@@ -1298,6 +1317,7 @@ pub async fn get_tournament_team_leaderboard(
             id: row.id,
             name: row.name,
             win_probability_group: row.win_probability_group,
+            is_amateur: row.is_amateur,
         });
     }
 

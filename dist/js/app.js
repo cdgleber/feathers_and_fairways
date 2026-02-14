@@ -396,7 +396,7 @@ class FantasyGolfApp {
             const container = document.getElementById('golferGroups');
             container.innerHTML = '';
 
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 9; i++) {
                 const groupGolfers = groups[i] || [];
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'golfer-group';
@@ -404,7 +404,7 @@ class FantasyGolfApp {
                 groupDiv.innerHTML = `
                     <div class="golfer-group-header">
                         <span class="material-icons">sports_golf</span>
-                        Group ${i} ${i === 1 ? '(Highest Probability)' : i === 6 ? '(Lowest Probability)' : ''}
+                        Group ${i} ${i === 1 ? '(Highest Probability)' : i === 9 ? '(Lowest Probability)' : ''}
                     </div>
                     <div class="golfer-list">
                         ${groupGolfers.map(golfer => `
@@ -415,7 +415,7 @@ class FantasyGolfApp {
                                     value="${golfer.id}" 
                                     id="golfer-${golfer.id}"
                                     onchange="app.selectGolfer(${i}, '${golfer.id}', '${golfer.name}')">
-                                <label for="golfer-${golfer.id}">${golfer.name}</label>
+                                <label for="golfer-${golfer.id}">${golfer.name}${golfer.is_amateur ? ' <span class="amateur-badge">(A)</span>' : ''}</label>
                             </div>
                         `).join('')}
                     </div>
@@ -441,7 +441,7 @@ class FantasyGolfApp {
         const createBtn = document.getElementById('createTeamBtn');
         
         container.innerHTML = '';
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 9; i++) {
             const selected = this.selectedGolfers.get(i);
             const badge = document.createElement('div');
             badge.className = `selection-badge ${selected ? 'selected' : ''}`;
@@ -452,7 +452,7 @@ class FantasyGolfApp {
             container.appendChild(badge);
         }
 
-        createBtn.disabled = this.selectedGolfers.size !== 6;
+        createBtn.disabled = this.selectedGolfers.size !== 9;
     }
 
     async createTeam() {
@@ -464,7 +464,7 @@ class FantasyGolfApp {
             return;
         }
 
-        if (this.selectedGolfers.size !== 6) {
+        if (this.selectedGolfers.size !== 9) {
             this.showToast('Please select one golfer from each group', 'error');
             return;
         }
@@ -1425,7 +1425,7 @@ class FantasyGolfApp {
                 </div>
 
                 <div class="selection-info">
-                    <p><strong>Select 6 golfers - one from each skill group</strong></p>
+                    <p><strong>Select 9 golfers - one from each skill group</strong></p>
                     <div id="selectionStatus" class="selection-status"></div>
                 </div>
 
@@ -1689,7 +1689,7 @@ class FantasyGolfApp {
 
             let html = '<div class="team-editor-table"><table><thead><tr><th>Group</th><th>Current Golfer</th><th>Replacement</th></tr></thead><tbody>';
 
-            for (let group = 1; group <= 6; group++) {
+            for (let group = 1; group <= 9; group++) {
                 const current = currentByGroup[group];
                 const options = golfersByGroup[group] || [];
 
@@ -1719,8 +1719,8 @@ class FantasyGolfApp {
         const selects = document.querySelectorAll('.team-editor-select');
         const golferIds = Array.from(selects).map(s => s.value);
 
-        if (golferIds.length !== 6) {
-            this.showToast('Must have exactly 6 golfers selected', 'error');
+        if (golferIds.length !== 9) {
+            this.showToast('Must have exactly 9 golfers selected', 'error');
             return;
         }
 

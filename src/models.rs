@@ -27,6 +27,7 @@ pub struct Golfer {
     pub id: String,
     pub name: String,
     pub win_probability_group: i32,
+    pub is_amateur: bool,
     pub is_active: bool,
     pub created_at: Option<String>,
 }
@@ -35,8 +36,9 @@ pub struct Golfer {
 pub struct CreateGolferRequest {
     #[validate(length(min = 1, max = 255))]
     pub name: String,
-    #[validate(range(min = 1, max = 6))]
+    #[validate(range(min = 1, max = 9))]
     pub win_probability_group: i32,
+    pub is_amateur: Option<bool>,
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -144,7 +146,7 @@ pub struct CreateTeamRequest {
     #[validate(length(min = 1, max = 255))]
     pub player_name: String,
     pub tournament_id: String,
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 9, max = 9))]
     pub golfer_ids: Vec<String>,
     #[validate(email)]
     pub email: Option<String>,
@@ -162,6 +164,7 @@ pub struct GolferSummary {
     pub id: String,
     pub name: String,
     pub win_probability_group: i32,
+    pub is_amateur: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -178,6 +181,7 @@ pub struct TeamGolferRow {
     pub id: String,
     pub name: String,
     pub win_probability_group: i32,
+    pub is_amateur: bool,
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -215,7 +219,7 @@ pub struct AdminLoginResponse {
 pub struct UpdateTeamRequest {
     pub key_code: String,
     pub tournament_id: String,
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 9, max = 9))]
     pub golfer_ids: Vec<String>,
 }
 
@@ -244,6 +248,7 @@ pub struct ScoreUploadResponse {
 pub struct GolferUploadEntry {
     pub name: String,
     pub group: i32,
+    pub amateur: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -319,7 +324,7 @@ pub struct AdminStats {
 #[derive(Debug, Deserialize, Validate)]
 pub struct AdminUpdateTeamGolfersRequest {
     pub tournament_id: String,
-    #[validate(length(min = 6, max = 6))]
+    #[validate(length(min = 9, max = 9))]
     pub golfer_ids: Vec<String>,
 }
 

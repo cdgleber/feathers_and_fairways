@@ -246,7 +246,14 @@
                 </div>
                 
                 <div id="adminContent" class="hidden">
-                
+
+                <div class="tabs" id="adminTabs">
+                    <button class="tab active" data-admin-tab="management">Management</button>
+                    <button class="tab" data-admin-tab="scoreEditor">Score Editor</button>
+                    <button class="tab" data-admin-tab="teamEditor">Team Editor</button>
+                </div>
+
+                <div id="managementTab" class="admin-tab-pane active">
                 <div class="admin-grid">
                     <!-- Database Stats -->
                     <div class="card full-width">
@@ -436,6 +443,56 @@
                         </div>
                     </div>
                 </div>
+                </div> <!-- Close managementTab -->
+
+                <div id="scoreEditorTab" class="admin-tab-pane">
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">edit_note</span>
+                            Score Editor
+                        </h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="scoreEditorTournament" class="form-label">Tournament</label>
+                                <select id="scoreEditorTournament" class="form-input">
+                                    <option value="">Select a tournament</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="scoreEditorGolfer" class="form-label">Golfer</label>
+                                <select id="scoreEditorGolfer" class="form-input" disabled>
+                                    <option value="">Select a golfer</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="scoreEditorTable"></div>
+                    </div>
+                </div>
+
+                <div id="teamEditorTab" class="admin-tab-pane">
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">group</span>
+                            Team Editor
+                        </h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="teamEditorTournament" class="form-label">Tournament</label>
+                                <select id="teamEditorTournament" class="form-input">
+                                    <option value="">Select a tournament</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="teamEditorTeam" class="form-label">Team</label>
+                                <select id="teamEditorTeam" class="form-input" disabled>
+                                    <option value="">Select a team</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="teamEditorContent"></div>
+                    </div>
+                </div>
+
                 </div> <!-- Close adminContent -->
             </div>
         </div>

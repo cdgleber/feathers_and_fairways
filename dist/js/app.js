@@ -92,12 +92,58 @@ class FantasyGolfApp {
             this.createTournament();
         });
 
-        // Tabs
-        document.querySelectorAll('.tab').forEach(tab => {
+        // Leaderboard tabs (scoped to avoid admin tab conflict)
+        document.querySelectorAll('#leaderboardView .tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
                 const tabName = e.currentTarget.dataset.tab;
                 this.switchTab(tabName);
             });
+        });
+
+        // Admin tabs
+        document.querySelectorAll('#adminTabs .tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const tabName = e.currentTarget.dataset.adminTab;
+                this.switchAdminTab(tabName);
+            });
+        });
+
+        // Score editor dropdowns
+        document.getElementById('scoreEditorTournament')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.loadScoreEditorGolfers(e.target.value);
+            } else {
+                const golferSelect = document.getElementById('scoreEditorGolfer');
+                golferSelect.innerHTML = '<option value="">Select a golfer</option>';
+                golferSelect.disabled = true;
+                document.getElementById('scoreEditorTable').innerHTML = '';
+            }
+        });
+        document.getElementById('scoreEditorGolfer')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.displayScoreEditorTable(e.target.value);
+            } else {
+                document.getElementById('scoreEditorTable').innerHTML = '';
+            }
+        });
+
+        // Team editor dropdowns
+        document.getElementById('teamEditorTournament')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.loadTeamEditorTeams(e.target.value);
+            } else {
+                const teamSelect = document.getElementById('teamEditorTeam');
+                teamSelect.innerHTML = '<option value="">Select a team</option>';
+                teamSelect.disabled = true;
+                document.getElementById('teamEditorContent').innerHTML = '';
+            }
+        });
+        document.getElementById('teamEditorTeam')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.displayTeamEditor(e.target.value);
+            } else {
+                document.getElementById('teamEditorContent').innerHTML = '';
+            }
         });
 
         // Tournament select
@@ -183,14 +229,29 @@ class FantasyGolfApp {
     }
 
     switchTab(tabName) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        
-        document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
+        const view = document.getElementById('leaderboardView');
+        view.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        view.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+        view.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
         document.getElementById(`${tabName}Tab`)?.classList.add('active');
 
         if (tabName === 'tournament') {
             this.loadTournaments();
+        }
+    }
+
+    switchAdminTab(tabName) {
+        document.querySelectorAll('#adminTabs .tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-tab-pane').forEach(p => p.classList.remove('active'));
+
+        document.querySelector(`[data-admin-tab="${tabName}"]`)?.classList.add('active');
+        document.getElementById(`${tabName}Tab`)?.classList.add('active');
+
+        if (tabName === 'scoreEditor') {
+            this.loadScoreEditorTournaments();
+        } else if (tabName === 'teamEditor') {
+            this.loadTeamEditorTournaments();
         }
     }
 
@@ -1384,6 +1445,315 @@ class FantasyGolfApp {
 
         await this.loadGolfersForSelection();
     }
+    // Score Editor methods
+    async loadScoreEditorTournaments() {
+        if (!this.currentSeason) return;
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            if (response.ok) {
+                const tournaments = await response.json();
+                const select = document.getElementById('scoreEditorTournament');
+                select.innerHTML = '<option value="">Select a tournament</option>' +
+                    tournaments.map(t => `<option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>`).join('');
+            }
+        } catch (error) {
+            console.error('Error loading score editor tournaments:', error);
+        }
+    }
+
+    async loadScoreEditorGolfers(tournamentId) {
+        try {
+            const [scoresRes, golfersRes] = await Promise.all([
+                fetch(`${API_BASE}/scores/tournament/${tournamentId}`),
+                fetch(`${API_BASE}/golfers/tournament/${tournamentId}`)
+            ]);
+
+            if (scoresRes.ok && golfersRes.ok) {
+                this.scoreEditorScores = await scoresRes.json();
+                this.scoreEditorGolfers = await golfersRes.json();
+                this.scoreEditorTournamentId = tournamentId;
+
+                // Find golfers that have scores
+                const golferIdsWithScores = new Set(this.scoreEditorScores.map(s => s.golfer_id));
+                const golfersWithScores = this.scoreEditorGolfers.filter(g => golferIdsWithScores.has(g.id));
+
+                const select = document.getElementById('scoreEditorGolfer');
+                select.disabled = false;
+                select.innerHTML = '<option value="">Select a golfer</option>' +
+                    golfersWithScores.map(g => `<option value="${g.id}">${g.name} (Group ${g.win_probability_group})</option>`).join('');
+                document.getElementById('scoreEditorTable').innerHTML = '';
+            }
+        } catch (error) {
+            this.showToast('Error loading score data', 'error');
+            console.error(error);
+        }
+    }
+
+    displayScoreEditorTable(golferId) {
+        const scores = this.scoreEditorScores.filter(s => s.golfer_id === golferId);
+        const container = document.getElementById('scoreEditorTable');
+
+        if (scores.length === 0) {
+            container.innerHTML = '<p class="loading">No scores found for this golfer.</p>';
+            return;
+        }
+
+        // Find all days
+        const days = [...new Set(scores.map(s => s.day))].sort((a, b) => a - b);
+
+        let html = '<div class="score-editor-table"><table><thead><tr><th>Hole</th>';
+        days.forEach(d => {
+            html += `<th colspan="2">Round ${d}</th>`;
+        });
+        html += '</tr><tr><th></th>';
+        days.forEach(() => {
+            html += '<th>Strokes</th><th>To Par</th>';
+        });
+        html += '</tr></thead><tbody>';
+
+        for (let hole = 1; hole <= 18; hole++) {
+            html += `<tr><td><strong>${hole}</strong></td>`;
+            days.forEach(day => {
+                const score = scores.find(s => s.day === day && s.hole === hole);
+                const strokes = score ? score.strokes : '';
+                const scoreToPar = score ? score.score_to_par : '';
+                html += `<td><input type="number" class="score-input" min="1" max="15"
+                    data-golfer-id="${golferId}" data-day="${day}" data-hole="${hole}" data-field="strokes"
+                    data-original="${strokes}" value="${strokes}"
+                    onchange="app.markScoreChanged(this)"></td>`;
+                html += `<td><input type="number" class="score-input" min="-5" max="10"
+                    data-golfer-id="${golferId}" data-day="${day}" data-hole="${hole}" data-field="score_to_par"
+                    data-original="${scoreToPar}" value="${scoreToPar}"
+                    onchange="app.markScoreChanged(this)"></td>`;
+            });
+            html += '</tr>';
+        }
+
+        html += '</tbody></table></div>';
+        html += '<button class="btn btn-primary" style="margin-top: var(--spacing-md);" onclick="app.saveEditedScores()"><span class="material-icons">save</span> Save Changes</button>';
+
+        container.innerHTML = html;
+    }
+
+    markScoreChanged(input) {
+        if (input.value !== input.dataset.original) {
+            input.classList.add('changed');
+        } else {
+            input.classList.remove('changed');
+        }
+    }
+
+    async saveEditedScores() {
+        const changedInputs = document.querySelectorAll('#scoreEditorTable .score-input.changed[data-field="strokes"]');
+        if (changedInputs.length === 0) {
+            this.showToast('No changes to save', 'info');
+            return;
+        }
+
+        const scores = [];
+        changedInputs.forEach(input => {
+            const golferId = input.dataset.golferId;
+            const day = parseInt(input.dataset.day);
+            const hole = parseInt(input.dataset.hole);
+            const strokes = parseInt(input.value);
+
+            // Find corresponding score_to_par input
+            const parInput = document.querySelector(
+                `.score-input[data-golfer-id="${golferId}"][data-day="${day}"][data-hole="${hole}"][data-field="score_to_par"]`
+            );
+            const scoreToPar = parseInt(parInput.value);
+
+            scores.push({ golfer_id: golferId, day, hole, strokes, score_to_par: scoreToPar });
+        });
+
+        // Also check for changed score_to_par inputs without changed strokes
+        const changedParInputs = document.querySelectorAll('#scoreEditorTable .score-input.changed[data-field="score_to_par"]');
+        changedParInputs.forEach(input => {
+            const golferId = input.dataset.golferId;
+            const day = parseInt(input.dataset.day);
+            const hole = parseInt(input.dataset.hole);
+
+            // Skip if already added via strokes change
+            if (scores.find(s => s.golfer_id === golferId && s.day === day && s.hole === hole)) return;
+
+            const strokesInput = document.querySelector(
+                `.score-input[data-golfer-id="${golferId}"][data-day="${day}"][data-hole="${hole}"][data-field="strokes"]`
+            );
+            scores.push({
+                golfer_id: golferId,
+                day,
+                hole,
+                strokes: parseInt(strokesInput.value),
+                score_to_par: parseInt(input.value)
+            });
+        });
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tournament_id: this.scoreEditorTournamentId,
+                    scores
+                })
+            });
+
+            if (response.ok) {
+                this.showToast('Scores saved successfully!', 'success');
+                // Refresh data
+                await this.loadScoreEditorGolfers(this.scoreEditorTournamentId);
+                const golferSelect = document.getElementById('scoreEditorGolfer');
+                if (golferSelect.value) {
+                    this.displayScoreEditorTable(golferSelect.value);
+                }
+            } else {
+                const error = await response.json();
+                this.showToast(error.message || 'Error saving scores', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error saving scores', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    // Team Editor methods
+    async loadTeamEditorTournaments() {
+        if (!this.currentSeason) return;
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            if (response.ok) {
+                const tournaments = await response.json();
+                const select = document.getElementById('teamEditorTournament');
+                select.innerHTML = '<option value="">Select a tournament</option>' +
+                    tournaments.map(t => `<option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>`).join('');
+            }
+        } catch (error) {
+            console.error('Error loading team editor tournaments:', error);
+        }
+    }
+
+    async loadTeamEditorTeams(tournamentId) {
+        this.teamEditorTournamentId = tournamentId;
+        try {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/tournaments/${tournamentId}/teams`);
+            if (response.ok) {
+                const teams = await response.json();
+                const select = document.getElementById('teamEditorTeam');
+                select.disabled = false;
+                select.innerHTML = '<option value="">Select a team</option>' +
+                    teams.map(t => `<option value="${t.id}">${t.player_name}</option>`).join('');
+                document.getElementById('teamEditorContent').innerHTML = '';
+            }
+        } catch (error) {
+            this.showToast('Error loading teams', 'error');
+            console.error(error);
+        }
+    }
+
+    async displayTeamEditor(teamId) {
+        this.teamEditorTeamId = teamId;
+        const tournamentId = this.teamEditorTournamentId;
+
+        this.showLoading();
+        try {
+            const [golferRes, teamGolferRes] = await Promise.all([
+                fetch(`${API_BASE}/golfers/tournament/${tournamentId}`),
+                fetch(`${API_BASE}/teams/${teamId}/golfers`)
+            ]);
+
+            if (!golferRes.ok || !teamGolferRes.ok) {
+                this.showToast('Error loading team data', 'error');
+                return;
+            }
+
+            const allGolfers = await golferRes.json();
+            const teamGolfers = await teamGolferRes.json();
+
+            // Group all golfers by group
+            const golfersByGroup = {};
+            allGolfers.forEach(g => {
+                if (!golfersByGroup[g.win_probability_group]) {
+                    golfersByGroup[g.win_probability_group] = [];
+                }
+                golfersByGroup[g.win_probability_group].push(g);
+            });
+
+            // Map current team golfers by group
+            const currentByGroup = {};
+            teamGolfers.forEach(g => {
+                currentByGroup[g.win_probability_group] = g;
+            });
+
+            let html = '<div class="team-editor-table"><table><thead><tr><th>Group</th><th>Current Golfer</th><th>Replacement</th></tr></thead><tbody>';
+
+            for (let group = 1; group <= 6; group++) {
+                const current = currentByGroup[group];
+                const options = golfersByGroup[group] || [];
+
+                html += `<tr><td><strong>Group ${group}</strong></td>`;
+                html += `<td>${current ? current.name : '<em>None</em>'}</td>`;
+                html += `<td><select class="team-editor-select" data-group="${group}">`;
+                options.forEach(g => {
+                    const selected = current && current.id === g.id ? ' selected' : '';
+                    html += `<option value="${g.id}"${selected}>${g.name}</option>`;
+                });
+                html += '</select></td></tr>';
+            }
+
+            html += '</tbody></table></div>';
+            html += `<button class="btn btn-primary" style="margin-top: var(--spacing-md);" onclick="app.saveTeamEditorChanges()"><span class="material-icons">save</span> Save Changes</button>`;
+
+            document.getElementById('teamEditorContent').innerHTML = html;
+        } catch (error) {
+            this.showToast('Error loading team editor', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async saveTeamEditorChanges() {
+        const selects = document.querySelectorAll('.team-editor-select');
+        const golferIds = Array.from(selects).map(s => s.value);
+
+        if (golferIds.length !== 6) {
+            this.showToast('Must have exactly 6 golfers selected', 'error');
+            return;
+        }
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(
+                `${API_BASE}/admin/teams/${this.teamEditorTeamId}/golfers`,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tournament_id: this.teamEditorTournamentId,
+                        golfer_ids: golferIds
+                    })
+                }
+            );
+
+            if (response.ok) {
+                this.showToast('Team updated successfully!', 'success');
+                // Refresh the editor
+                await this.displayTeamEditor(this.teamEditorTeamId);
+            } else {
+                const error = await response.json();
+                this.showToast(error.message || 'Error updating team', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error updating team', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
     async loadAdminStats() {
         try {
             const response = await this.makeAdminRequest(`${API_BASE}/admin/stats`);

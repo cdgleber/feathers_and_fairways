@@ -5,7 +5,7 @@ mod auth;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, post, put},
     middleware,
 };
 use sqlx::sqlite::{SqlitePoolOptions, SqliteConnectOptions};
@@ -103,6 +103,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/tournaments/:tournament_id/scores/upload", post(routes::upload_tournament_scores))
             .route("/golfers/upload", post(routes::upload_golfers))
             .route("/tournaments/:tournament_id/groups/upload", post(routes::upload_tournament_golfer_groups))
+            .route("/tournaments/:tournament_id/teams", get(routes::list_teams_for_tournament))
+            .route("/teams/:team_id/golfers", put(routes::admin_update_team_golfers))
             .route("/stats", get(routes::get_admin_stats))
             .layer(middleware::from_fn(auth::admin_auth_middleware))
         )

@@ -315,6 +315,14 @@ pub struct AdminStats {
     pub popular_golfers: Vec<PopularGolfer>,
 }
 
+// Admin Team Golfer Update
+#[derive(Debug, Deserialize, Validate)]
+pub struct AdminUpdateTeamGolfersRequest {
+    pub tournament_id: String,
+    #[validate(length(min = 6, max = 6))]
+    pub golfer_ids: Vec<String>,
+}
+
 // Completed Tournament History
 #[derive(Debug, Serialize, FromRow)]
 pub struct CompletedTournament {

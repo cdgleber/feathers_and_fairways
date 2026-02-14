@@ -932,6 +932,116 @@ pub async fn update_team(
     Ok(Json(TeamWithGolfers { team, golfers }))
 }
 
+// List teams for a tournament (admin)
+pub async fn list_teams_for_tournament(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+) -> Result<Json<Vec<Team>>, (StatusCode, Json<ApiError>)> {
+    let teams = sqlx::query_as::<_, Team>(
+        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at \
+         FROM teams WHERE tournament_id = ? ORDER BY player_name"
+    )
+    .bind(&tournament_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(teams))
+}
+
+// Admin update team golfers (bypasses start-date check)
+pub async fn admin_update_team_golfers(
+    State(pool): State<SqlitePool>,
+    Path(team_id): Path<String>,
+    Json(payload): Json<AdminUpdateTeamGolfersRequest>,
+) -> Result<Json<TeamWithGolfers>, (StatusCode, Json<ApiError>)> {
+    payload.validate()
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
+
+    // Validate team exists
+    let team = sqlx::query_as::<_, Team>(
+        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE id = ?"
+    )
+    .bind(&team_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Team not found"))))?;
+
+    // Verify golfer selection (one from each group, using tournament-specific groups)
+    let mut groups_used = std::collections::HashSet::new();
+
+    for golfer_id in &payload.golfer_ids {
+        let golfer = sqlx::query_as::<_, Golfer>(
+            "SELECT g.id, g.name, \
+             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+             g.is_active, g.created_at \
+             FROM golfers g \
+             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             WHERE g.id = ?"
+        )
+        .bind(&payload.tournament_id)
+        .bind(golfer_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+        .ok_or((StatusCode::BAD_REQUEST, Json(ApiError::new("Invalid golfer ID"))))?;
+
+        if !groups_used.insert(golfer.win_probability_group) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new("Cannot select multiple golfers from the same group")),
+            ));
+        }
+    }
+
+    if groups_used.len() != 6 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("Must select exactly one golfer from each of the 6 groups")),
+        ));
+    }
+
+    // Transaction: delete old, insert new
+    let mut tx = pool.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    sqlx::query("DELETE FROM team_golfers WHERE team_id = ?")
+        .bind(&team_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    for golfer_id in &payload.golfer_ids {
+        let tg_id = new_id();
+        sqlx::query("INSERT INTO team_golfers (id, team_id, golfer_id) VALUES (?, ?, ?)")
+            .bind(&tg_id)
+            .bind(&team_id)
+            .bind(golfer_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+    }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Fetch updated team golfers
+    let golfers = sqlx::query_as::<_, Golfer>(
+        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+         FROM golfers g \
+         INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
+         WHERE tg.team_id = ? \
+         ORDER BY g.win_probability_group"
+    )
+    .bind(&team_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(TeamWithGolfers { team, golfers }))
+}
+
 // Upload tournament scores from JSON
 pub async fn upload_tournament_scores(
     State(pool): State<SqlitePool>,

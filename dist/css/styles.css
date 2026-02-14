@@ -1058,3 +1058,98 @@ body,
     letter-spacing: 0.5px;
     margin-top: var(--spacing-xs);
 }
+
+/* Admin Tab Panes */
+.admin-tab-pane {
+    display: none;
+}
+
+.admin-tab-pane.active {
+    display: block;
+}
+
+/* Score Editor */
+.score-editor-table {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: var(--spacing-md);
+}
+
+.score-editor-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.score-editor-table th,
+.score-editor-table td {
+    padding: var(--spacing-sm);
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+}
+
+.score-editor-table th {
+    background: var(--surface-variant);
+    font-weight: 600;
+}
+
+.score-input {
+    width: 60px;
+    padding: 4px 8px;
+    text-align: center;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: var(--font-family);
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.score-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.score-input.changed {
+    border-color: var(--warning);
+    background: rgba(255, 152, 0, 0.1);
+}
+
+/* Team Editor */
+.team-editor-table {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: var(--spacing-md);
+}
+
+.team-editor-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.team-editor-table th,
+.team-editor-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+
+.team-editor-table th {
+    background: var(--surface-variant);
+    font-weight: 600;
+}
+
+.team-editor-select {
+    min-width: 200px;
+    padding: 8px 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: var(--font-family);
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.team-editor-select:focus {
+    outline: none;
+    border-color: var(--primary);
+}

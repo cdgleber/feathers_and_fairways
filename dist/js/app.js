@@ -182,6 +182,16 @@ class FantasyGolfApp {
             this.previewGroupFile(e);
         });
 
+        // Import file input
+        document.getElementById('importFileInput')?.addEventListener('change', (e) => {
+            this.previewImportFile(e);
+        });
+
+        // Import tournament select
+        document.getElementById('importTournamentSelect')?.addEventListener('change', () => {
+            this.updateImportCommitButton();
+        });
+
         // Group upload tournament select
         document.getElementById('groupUploadTournament')?.addEventListener('change', () => {
             const btn = document.getElementById('uploadGroupsBtn');
@@ -252,6 +262,8 @@ class FantasyGolfApp {
             this.loadScoreEditorTournaments();
         } else if (tabName === 'teamEditor') {
             this.loadTeamEditorTournaments();
+        } else if (tabName === 'import') {
+            this.loadImportTournaments();
         }
     }
 
@@ -1950,6 +1962,323 @@ class FantasyGolfApp {
         document.getElementById('historyStatsSection')?.classList.add('hidden');
         document.getElementById('historyLeaderboardSection')?.classList.add('hidden');
         document.getElementById('historyEmptyState')?.classList.remove('hidden');
+    }
+
+    // Tournament Import methods
+    async loadImportTournaments() {
+        if (!this.currentSeason) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            if (response.ok) {
+                const tournaments = await response.json();
+                const select = document.getElementById('importTournamentSelect');
+                if (select) {
+                    select.innerHTML = '<option value="">Select a tournament</option>' +
+                        tournaments.map(t => `
+                            <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
+                        `).join('');
+                }
+            }
+        } catch (error) {
+            console.error('Error loading tournaments for import:', error);
+        }
+    }
+
+    async previewImportFile(event) {
+        const file = event.target.files[0];
+        const previewSection = document.getElementById('importPreviewSection');
+        const resultSection = document.getElementById('importResultSection');
+
+        resultSection.classList.add('hidden');
+
+        if (!file) {
+            previewSection.classList.add('hidden');
+            this.pendingImportData = null;
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                if (!data.tournament || !data.players || !Array.isArray(data.players)) {
+                    this.showToast('Invalid tournament.json format', 'error');
+                    return;
+                }
+
+                this.pendingImportData = data;
+
+                // Call preview endpoint
+                this.showLoading();
+                try {
+                    const response = await this.makeAdminRequest(
+                        `${API_BASE}/admin/tournaments/import/preview`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        }
+                    );
+
+                    if (response.ok) {
+                        const preview = await response.json();
+                        this.importPreviewData = preview;
+                        this.displayImportPreview(preview);
+                        previewSection.classList.remove('hidden');
+                    } else {
+                        const error = await response.json();
+                        this.showToast(error.message || 'Error previewing import', 'error');
+                    }
+                } catch (error) {
+                    this.showToast('Error previewing import', 'error');
+                    console.error(error);
+                } finally {
+                    this.hideLoading();
+                }
+            } catch (error) {
+                this.showToast('Invalid JSON file', 'error');
+                previewSection.classList.add('hidden');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    displayImportPreview(preview) {
+        document.getElementById('importTournamentName').textContent = preview.tournament_name;
+        document.getElementById('importMatchedCount').textContent = preview.matched.length;
+        document.getElementById('importUnmatchedCount').textContent = preview.unmatched.length;
+
+        // Matched golfers table
+        const matchedContainer = document.getElementById('importMatchedList');
+        if (preview.matched.length > 0) {
+            let html = '<table><thead><tr><th>JSON Name</th><th>Matched To</th><th>Amateur</th><th>Rounds</th></tr></thead><tbody>';
+            preview.matched.forEach(m => {
+                html += `<tr>
+                    <td>${m.json_name}</td>
+                    <td>${m.golfer_name}</td>
+                    <td>${m.is_amateur ? 'Yes' : 'No'}</td>
+                    <td>${m.rounds_available.join(', ')}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            matchedContainer.innerHTML = html;
+        } else {
+            matchedContainer.innerHTML = '<p class="loading">No automatic matches found.</p>';
+        }
+
+        // Unmatched golfers
+        const unmatchedContainer = document.getElementById('importUnmatchedList');
+        if (preview.unmatched.length > 0) {
+            let html = '';
+            preview.unmatched.forEach((u, idx) => {
+                html += `<div class="info-card" style="margin-bottom: var(--spacing-sm); padding: var(--spacing-sm) var(--spacing-md);">
+                    <div style="display: flex; align-items: center; gap: var(--spacing-md); flex-wrap: wrap;">
+                        <span><strong>${u.json_name}</strong> (Rounds: ${u.rounds_available.join(', ')})</span>
+                        <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                            <select class="form-input import-golfer-select" data-slug="${u.slug}" data-index="${idx}" style="max-width: 300px;">
+                                <option value="">-- Skip this golfer --</option>
+                                ${u.candidates.map(c => `<option value="${c.golfer_id}">${c.golfer_name}</option>`).join('')}
+                            </select>
+                            <input type="text" class="form-input import-golfer-search" data-index="${idx}" placeholder="Search golfers..." style="max-width: 200px;" oninput="app.searchImportGolfer(this, ${idx})">
+                        </div>
+                    </div>
+                    <div id="importSearchResults_${idx}" class="hidden" style="margin-top: var(--spacing-sm);"></div>
+                </div>`;
+            });
+            unmatchedContainer.innerHTML = html;
+
+            // Listen for changes on selects to update commit button
+            document.querySelectorAll('.import-golfer-select').forEach(select => {
+                select.addEventListener('change', () => this.updateImportCommitButton());
+            });
+        } else {
+            unmatchedContainer.innerHTML = '<p class="loading">All golfers matched automatically!</p>';
+        }
+
+        document.getElementById('importUnmatchedSection').classList.toggle('hidden', preview.unmatched.length === 0);
+
+        this.updateImportCommitButton();
+    }
+
+    async searchImportGolfer(input, index) {
+        const query = input.value.trim();
+        const resultsContainer = document.getElementById(`importSearchResults_${index}`);
+
+        if (query.length < 2) {
+            resultsContainer.classList.add('hidden');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/golfers`);
+            if (response.ok) {
+                const golfers = await response.json();
+                const filtered = golfers.filter(g => g.name.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
+
+                if (filtered.length > 0) {
+                    let html = '';
+                    filtered.forEach(g => {
+                        html += `<button type="button" class="btn btn-secondary btn-sm" style="margin: 2px;"
+                            onclick="app.selectImportGolfer(${index}, '${g.id}', '${g.name.replace(/'/g, "\\'")}')">
+                            ${g.name} (G${g.win_probability_group})
+                        </button>`;
+                    });
+                    resultsContainer.innerHTML = html;
+                    resultsContainer.classList.remove('hidden');
+                } else {
+                    resultsContainer.innerHTML = '<span style="color: var(--text-secondary);">No matches found</span>';
+                    resultsContainer.classList.remove('hidden');
+                }
+            }
+        } catch (error) {
+            console.error('Error searching golfers:', error);
+        }
+    }
+
+    selectImportGolfer(index, golferId, golferName) {
+        const select = document.querySelector(`.import-golfer-select[data-index="${index}"]`);
+        // Add option if not present
+        let optionExists = false;
+        for (const opt of select.options) {
+            if (opt.value === golferId) {
+                opt.selected = true;
+                optionExists = true;
+                break;
+            }
+        }
+        if (!optionExists) {
+            const option = document.createElement('option');
+            option.value = golferId;
+            option.textContent = golferName;
+            option.selected = true;
+            select.appendChild(option);
+        }
+
+        // Clear search
+        const searchInput = document.querySelector(`.import-golfer-search[data-index="${index}"]`);
+        if (searchInput) searchInput.value = '';
+        document.getElementById(`importSearchResults_${index}`).classList.add('hidden');
+
+        this.updateImportCommitButton();
+    }
+
+    updateImportCommitButton() {
+        const tournamentId = document.getElementById('importTournamentSelect')?.value;
+        const hasData = !!this.pendingImportData;
+        const btn = document.getElementById('importCommitBtn');
+        if (btn) {
+            btn.disabled = !tournamentId || !hasData;
+        }
+    }
+
+    async commitImport() {
+        const tournamentId = document.getElementById('importTournamentSelect').value;
+        if (!tournamentId) {
+            this.showToast('Please select a target tournament', 'error');
+            return;
+        }
+
+        if (!this.pendingImportData || !this.importPreviewData) {
+            this.showToast('Please upload and preview a file first', 'error');
+            return;
+        }
+
+        const preview = this.importPreviewData;
+        const rawData = this.pendingImportData;
+
+        // Build player_scores array from matched + resolved unmatched
+        const playerScores = [];
+
+        // Add matched golfers
+        for (const m of preview.matched) {
+            const player = rawData.players.find(p => p.slug === m.slug);
+            if (!player) continue;
+
+            playerScores.push({
+                golfer_id: m.golfer_id,
+                rounds: player.rounds.map(r => ({
+                    round_number: r.round_number,
+                    holes: r.holes.map(h => ({
+                        hole: h.hole,
+                        strokes: h.score,
+                        par: h.par
+                    }))
+                }))
+            });
+        }
+
+        // Add resolved unmatched golfers
+        const unmatchedSelects = document.querySelectorAll('.import-golfer-select');
+        unmatchedSelects.forEach(select => {
+            const golferId = select.value;
+            if (!golferId) return; // Skipped
+
+            const slug = select.dataset.slug;
+            const player = rawData.players.find(p => p.slug === slug);
+            if (!player) return;
+
+            playerScores.push({
+                golfer_id: golferId,
+                rounds: player.rounds.map(r => ({
+                    round_number: r.round_number,
+                    holes: r.holes.map(h => ({
+                        hole: h.hole,
+                        strokes: h.score,
+                        par: h.par
+                    }))
+                }))
+            });
+        });
+
+        if (playerScores.length === 0) {
+            this.showToast('No golfers selected for import', 'error');
+            return;
+        }
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(
+                `${API_BASE}/admin/tournaments/import/commit`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tournament_id: tournamentId,
+                        player_scores: playerScores
+                    })
+                }
+            );
+
+            const result = await response.json();
+            const resultSection = document.getElementById('importResultSection');
+            const resultContent = document.getElementById('importResultContent');
+
+            if (response.ok) {
+                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
+                html += `<p><strong>${result.total_scores_processed}</strong> hole scores imported for <strong>${playerScores.length}</strong> golfers.</p>`;
+                if (result.errors.length > 0) {
+                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
+                    html += `<ul style="margin-left: 16px;">`;
+                    result.errors.forEach(err => {
+                        html += `<li>${err}</li>`;
+                    });
+                    html += `</ul>`;
+                }
+                html += `</div>`;
+                resultContent.innerHTML = html;
+                resultSection.classList.remove('hidden');
+                this.showToast('Scores imported successfully!', 'success');
+            } else {
+                this.showToast(result.message || 'Error importing scores', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error importing scores', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
     }
 }
 

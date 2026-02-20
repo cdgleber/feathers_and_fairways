@@ -251,6 +251,7 @@
                     <button class="tab active" data-admin-tab="management">Management</button>
                     <button class="tab" data-admin-tab="scoreEditor">Score Editor</button>
                     <button class="tab" data-admin-tab="teamEditor">Team Editor</button>
+                    <button class="tab" data-admin-tab="import">Import</button>
                 </div>
 
                 <div id="managementTab" class="admin-tab-pane active">
@@ -490,6 +491,69 @@
                             </div>
                         </div>
                         <div id="teamEditorContent"></div>
+                    </div>
+                </div>
+
+                <div id="importTab" class="admin-tab-pane">
+                    <div class="card full-width">
+                        <h3 class="card-title">
+                            <span class="material-icons">file_upload</span>
+                            Import Tournament Scores
+                        </h3>
+                        <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                            Upload a <code>tournament.json</code> file from get-golf-scores to automatically match players and import scores.
+                        </p>
+                        <div class="form">
+                            <div class="form-group">
+                                <label for="importFileInput" class="form-label">Tournament File (.json)</label>
+                                <input type="file" id="importFileInput" class="form-input" accept=".json">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="importPreviewSection" class="hidden">
+                        <div class="card full-width">
+                            <h3 class="card-title">
+                                <span class="material-icons">preview</span>
+                                Import Preview: <span id="importTournamentName"></span>
+                            </h3>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="importTournamentSelect" class="form-label">Target Tournament</label>
+                                    <select id="importTournamentSelect" class="form-input">
+                                        <option value="">Select a tournament</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="importMatchedSection">
+                                <h4 style="margin: var(--spacing-md) 0 var(--spacing-sm); color: var(--success);">
+                                    <span class="material-icons" style="vertical-align: middle; font-size: 18px;">check_circle</span>
+                                    Matched Golfers (<span id="importMatchedCount">0</span>)
+                                </h4>
+                                <div id="importMatchedList" class="leaderboard"></div>
+                            </div>
+
+                            <div id="importUnmatchedSection">
+                                <h4 style="margin: var(--spacing-md) 0 var(--spacing-sm); color: var(--warning, #f59e0b);">
+                                    <span class="material-icons" style="vertical-align: middle; font-size: 18px;">warning</span>
+                                    Unmatched Golfers (<span id="importUnmatchedCount">0</span>)
+                                </h4>
+                                <div id="importUnmatchedList"></div>
+                            </div>
+
+                            <button class="btn btn-primary" id="importCommitBtn" disabled onclick="app.commitImport()" style="margin-top: var(--spacing-md);">
+                                <span class="material-icons">cloud_upload</span>
+                                Import Scores
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="importResultSection" class="hidden">
+                        <div class="card full-width">
+                            <div id="importResultContent"></div>
+                        </div>
                     </div>
                 </div>
 

@@ -2141,7 +2141,7 @@ class FantasyGolfApp {
         if (preview.unmatched.length > 0) {
             let html = '';
             preview.unmatched.forEach((u, idx) => {
-                html += `<div class="info-card" style="margin-bottom: var(--spacing-sm); padding: var(--spacing-sm) var(--spacing-md);">
+                html += `<div class="info-card" id="unmatchedCard_${idx}" style="margin-bottom: var(--spacing-sm); padding: var(--spacing-sm) var(--spacing-md);">
                     <div style="display: flex; align-items: center; gap: var(--spacing-md); flex-wrap: wrap;">
                         <span><strong>${u.json_name}</strong> (Rounds: ${u.rounds_available.join(', ')})</span>
                         <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
@@ -2150,9 +2150,23 @@ class FantasyGolfApp {
                                 ${u.candidates.map(c => `<option value="${c.golfer_id}">${c.golfer_name}</option>`).join('')}
                             </select>
                             <input type="text" class="form-input import-golfer-search" data-index="${idx}" placeholder="Search golfers..." style="max-width: 200px;" oninput="app.searchImportGolfer(this, ${idx})">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="app.toggleNewGolferForm(${idx})">Add as New Golfer</button>
                         </div>
                     </div>
                     <div id="importSearchResults_${idx}" class="hidden" style="margin-top: var(--spacing-sm);"></div>
+                    <div id="newGolferForm_${idx}" class="hidden" style="margin-top: var(--spacing-sm); display: flex; align-items: center; gap: var(--spacing-sm); flex-wrap: wrap; padding: var(--spacing-sm); border: 1px solid var(--border); border-radius: var(--radius);">
+                        <span style="font-weight: 500;">New: ${u.json_name}</span>
+                        <label style="display: flex; align-items: center; gap: 4px;">
+                            Group:
+                            <select class="form-input new-golfer-group" data-index="${idx}" style="width: 60px;">
+                                ${[1,2,3,4,5,6,7,8,9].map(g => `<option value="${g}">${g}</option>`).join('')}
+                            </select>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 4px;">
+                            <input type="checkbox" class="new-golfer-amateur" data-index="${idx}"> Amateur
+                        </label>
+                        <button type="button" class="btn btn-sm" style="background: var(--error); color: white;" onclick="app.cancelNewGolferForm(${idx})">Cancel</button>
+                    </div>
                 </div>`;
             });
             unmatchedContainer.innerHTML = html;
@@ -2229,6 +2243,32 @@ class FantasyGolfApp {
         if (searchInput) searchInput.value = '';
         document.getElementById(`importSearchResults_${index}`).classList.add('hidden');
 
+        this.updateImportCommitButton();
+    }
+
+    toggleNewGolferForm(index) {
+        const form = document.getElementById(`newGolferForm_${index}`);
+        const select = document.querySelector(`.import-golfer-select[data-index="${index}"]`);
+        if (form.classList.contains('hidden')) {
+            // Show new golfer form, disable the select dropdown
+            form.classList.remove('hidden');
+            form.style.display = 'flex';
+            select.disabled = true;
+            select.value = '';
+            // Mark this card as "adding new golfer"
+            form.dataset.active = 'true';
+        } else {
+            this.cancelNewGolferForm(index);
+        }
+        this.updateImportCommitButton();
+    }
+
+    cancelNewGolferForm(index) {
+        const form = document.getElementById(`newGolferForm_${index}`);
+        const select = document.querySelector(`.import-golfer-select[data-index="${index}"]`);
+        form.classList.add('hidden');
+        form.dataset.active = '';
+        select.disabled = false;
         this.updateImportCommitButton();
     }
 
@@ -2327,15 +2367,41 @@ class FantasyGolfApp {
             playerScores.push(entry);
         }
 
-        // Add resolved unmatched golfers
+        // Add resolved unmatched golfers (mapped to existing DB golfer)
+        const newGolfers = [];
         const unmatchedSelects = document.querySelectorAll('.import-golfer-select');
         unmatchedSelects.forEach(select => {
-            const golferId = select.value;
-            if (!golferId) return; // Skipped
-
+            const idx = select.dataset.index;
             const slug = select.dataset.slug;
             const player = rawData.players.find(p => p.slug === slug);
             if (!player) return;
+
+            // Check if this unmatched golfer is being added as a new golfer
+            const newGolferForm = document.getElementById(`newGolferForm_${idx}`);
+            if (newGolferForm && newGolferForm.dataset.active === 'true') {
+                const groupSelect = document.querySelector(`.new-golfer-group[data-index="${idx}"]`);
+                const amateurCheckbox = document.querySelector(`.new-golfer-amateur[data-index="${idx}"]`);
+                const unmatchedData = preview.unmatched[parseInt(idx)];
+                newGolfers.push({
+                    name: unmatchedData.json_name,
+                    slug: slug,
+                    win_probability_group: parseInt(groupSelect.value),
+                    is_amateur: amateurCheckbox.checked,
+                    espn_athlete_id: player.espn_athlete_id || null,
+                    rounds: player.rounds.map(r => ({
+                        round_number: r.round_number,
+                        holes: r.holes.map(h => ({
+                            hole: h.hole,
+                            strokes: h.score,
+                            par: h.par
+                        }))
+                    }))
+                });
+                return;
+            }
+
+            const golferId = select.value;
+            if (!golferId) return; // Skipped
 
             const entry = {
                 golfer_id: golferId,
@@ -2354,7 +2420,7 @@ class FantasyGolfApp {
             playerScores.push(entry);
         });
 
-        if (playerScores.length === 0) {
+        if (playerScores.length === 0 && newGolfers.length === 0) {
             this.showToast('No golfers selected for import', 'error');
             return;
         }
@@ -2369,7 +2435,8 @@ class FantasyGolfApp {
                     body: JSON.stringify({
                         tournament_id: tournamentId,
                         espn_tournament_id: rawData.espn_tournament_id || undefined,
-                        player_scores: playerScores
+                        player_scores: playerScores,
+                        new_golfers: newGolfers
                     })
                 }
             );

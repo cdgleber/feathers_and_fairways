@@ -435,6 +435,20 @@ pub struct ImportCommitRequest {
     pub tournament_id: String,
     pub espn_tournament_id: Option<String>,
     pub player_scores: Vec<ImportPlayerScore>,
+    #[serde(default)]
+    pub new_golfers: Vec<NewGolferImport>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct NewGolferImport {
+    pub name: String,
+    pub slug: String,
+    pub win_probability_group: i32,
+    #[serde(default)]
+    pub is_amateur: bool,
+    pub espn_athlete_id: Option<String>,
+    pub rounds: Vec<ImportCommitRound>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -534,7 +548,9 @@ pub struct EspnLinescores {
 
 #[derive(Debug, Deserialize)]
 pub struct EspnRound {
-    pub period: i32,
+    #[serde(default)]
+    pub period: Option<i32>,
+    #[serde(default)]
     pub linescores: Option<EspnRoundLinescores>,
 }
 
@@ -545,8 +561,11 @@ pub struct EspnRoundLinescores {
 
 #[derive(Debug, Deserialize)]
 pub struct EspnHoleScore {
-    pub period: i32,
+    #[serde(default)]
+    pub period: Option<i32>,
+    #[serde(default)]
     pub par: Option<i32>,
+    #[serde(default)]
     pub value: Option<i32>,
 }
 

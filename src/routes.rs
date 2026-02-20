@@ -1511,14 +1511,28 @@ async fn fetch_espn_competitor(
         None => return Ok(EspnPlayerData { display_name, slug, espn_athlete_id, rounds: vec![] }),
     };
 
-    let linescores: EspnLinescores = client.get(&linescores_ref.href).send().await
-        .map_err(|e| format!("linescores fetch: {}", e))?
-        .json().await
-        .map_err(|e| format!("linescores parse: {}", e))?;
+    let linescores_response = client.get(&linescores_ref.href).send().await
+        .map_err(|e| format!("linescores fetch: {}", e))?;
+    let linescores_text = linescores_response.text().await
+        .map_err(|e| format!("linescores read: {}", e))?;
+
+    let linescores: EspnLinescores = match serde_json::from_str(&linescores_text) {
+        Ok(ls) => ls,
+        Err(e) => {
+            let truncated = if linescores_text.len() > 200 { &linescores_text[..200] } else { &linescores_text };
+            tracing::warn!("ESPN: linescores parse failed for {}: {} — body: {}", display_name, e, truncated);
+            return Ok(EspnPlayerData { display_name, slug, espn_athlete_id, rounds: vec![] });
+        }
+    };
 
     // Transform ESPN rounds into ImportRound format
     let mut rounds = Vec::new();
     for espn_round in &linescores.items {
+        let round_period = match espn_round.period {
+            Some(p) => p,
+            None => continue,
+        };
+
         let hole_scores = match &espn_round.linescores {
             Some(ls) => &ls.items,
             None => continue,
@@ -1533,8 +1547,9 @@ async fn fetch_espn_competitor(
             .filter_map(|h| {
                 let par = h.par?;
                 let score = h.value?;
+                let hole_num = h.period?;
                 Some(ImportHole {
-                    hole: h.period,
+                    hole: hole_num,
                     par,
                     score,
                 })
@@ -1543,7 +1558,7 @@ async fn fetch_espn_competitor(
 
         if !holes.is_empty() {
             rounds.push(ImportRound {
-                round_number: espn_round.period,
+                round_number: round_period,
                 holes,
             });
         }
@@ -1673,6 +1688,61 @@ pub async fn import_commit(
 
     let mut total_processed: usize = 0;
     let mut errors: Vec<String> = Vec::new();
+
+    // Process new golfers first: create them in DB, then import their scores
+    for new_golfer in &payload.new_golfers {
+        if new_golfer.win_probability_group < 1 || new_golfer.win_probability_group > 9 {
+            errors.push(format!("{}: group must be between 1 and 9", new_golfer.name));
+            continue;
+        }
+
+        let golfer_id = new_id();
+        sqlx::query(
+            "INSERT INTO golfers (id, name, win_probability_group, is_amateur, espn_id) VALUES (?, ?, ?, ?, ?)"
+        )
+        .bind(&golfer_id)
+        .bind(&new_golfer.name)
+        .bind(new_golfer.win_probability_group)
+        .bind(new_golfer.is_amateur)
+        .bind(&new_golfer.espn_athlete_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        // Import their rounds
+        for round in &new_golfer.rounds {
+            if round.round_number < 1 || round.round_number > 4 {
+                errors.push(format!("New golfer {}: round_number {} out of range", new_golfer.name, round.round_number));
+                continue;
+            }
+
+            for hole in &round.holes {
+                let score_to_par = hole.strokes - hole.par;
+                let fantasy_points = calculate_fantasy_points(score_to_par, new_golfer.is_amateur);
+                let id = new_id();
+
+                sqlx::query(
+                    "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT (tournament_id, golfer_id, day, hole) \
+                     DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
+                )
+                .bind(&id)
+                .bind(&payload.tournament_id)
+                .bind(&golfer_id)
+                .bind(round.round_number)
+                .bind(hole.hole)
+                .bind(hole.strokes)
+                .bind(score_to_par)
+                .bind(fantasy_points)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+                total_processed += 1;
+            }
+        }
+    }
 
     for player_score in &payload.player_scores {
         // Store ESPN athlete ID on golfer if provided and not already set

@@ -1979,6 +1979,24 @@ class FantasyGolfApp {
                             <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
                         `).join('');
                 }
+
+                // Populate refresh tournament select (only ESPN-linked tournaments)
+                const refreshSelect = document.getElementById('refreshTournamentSelect');
+                const refreshBtn = document.getElementById('refreshScoresBtn');
+                if (refreshSelect) {
+                    const espnTournaments = tournaments.filter(t => t.espn_tournament_id);
+                    if (espnTournaments.length > 0) {
+                        refreshSelect.innerHTML = '<option value="">Select a tournament</option>' +
+                            espnTournaments.map(t => `
+                                <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
+                            `).join('');
+                        refreshSelect.addEventListener('change', () => {
+                            if (refreshBtn) refreshBtn.disabled = !refreshSelect.value;
+                        });
+                    } else {
+                        refreshSelect.innerHTML = '<option value="">No ESPN-imported tournaments</option>';
+                    }
+                }
             }
         } catch (error) {
             console.error('Error loading tournaments for import:', error);
@@ -2079,6 +2097,7 @@ class FantasyGolfApp {
                 this.pendingImportData = {
                     tournament: { name: data.tournament_name },
                     players: data.players,
+                    espn_tournament_id: espnId,
                 };
                 this.displayImportPreview(this.importPreviewData);
                 previewSection.classList.remove('hidden');
@@ -2222,6 +2241,52 @@ class FantasyGolfApp {
         }
     }
 
+    async refreshScores() {
+        const tournamentId = document.getElementById('refreshTournamentSelect')?.value;
+        if (!tournamentId) {
+            this.showToast('Please select a tournament', 'error');
+            return;
+        }
+
+        const resultSection = document.getElementById('refreshResultSection');
+        const resultContent = document.getElementById('refreshResultContent');
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(
+                `${API_BASE}/admin/tournaments/${tournamentId}/scores/refresh`,
+                { method: 'POST' }
+            );
+
+            const result = await response.json();
+
+            if (response.ok) {
+                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
+                html += `<p><strong>${result.total_scores_processed}</strong> hole scores processed.</p>`;
+                html += `<p><strong>${result.golfers_updated}</strong> golfers updated, <strong>${result.golfers_skipped}</strong> skipped.</p>`;
+                if (result.errors.length > 0) {
+                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
+                    html += `<ul style="margin-left: 16px;">`;
+                    result.errors.forEach(err => { html += `<li>${err}</li>`; });
+                    html += `</ul>`;
+                }
+                html += `</div>`;
+                resultContent.innerHTML = html;
+                resultSection.classList.remove('hidden');
+                this.showToast('Scores refreshed successfully!', 'success');
+            } else {
+                this.showToast(result.message || 'Error refreshing scores', 'error');
+                resultSection.classList.add('hidden');
+            }
+        } catch (error) {
+            this.showToast('Error refreshing scores', 'error');
+            console.error(error);
+            resultSection.classList.add('hidden');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
     async commitImport() {
         const tournamentId = document.getElementById('importTournamentSelect').value;
         if (!tournamentId) {
@@ -2245,7 +2310,7 @@ class FantasyGolfApp {
             const player = rawData.players.find(p => p.slug === m.slug);
             if (!player) continue;
 
-            playerScores.push({
+            const entry = {
                 golfer_id: m.golfer_id,
                 rounds: player.rounds.map(r => ({
                     round_number: r.round_number,
@@ -2255,7 +2320,11 @@ class FantasyGolfApp {
                         par: h.par
                     }))
                 }))
-            });
+            };
+            if (player.espn_athlete_id) {
+                entry.espn_athlete_id = player.espn_athlete_id;
+            }
+            playerScores.push(entry);
         }
 
         // Add resolved unmatched golfers
@@ -2268,7 +2337,7 @@ class FantasyGolfApp {
             const player = rawData.players.find(p => p.slug === slug);
             if (!player) return;
 
-            playerScores.push({
+            const entry = {
                 golfer_id: golferId,
                 rounds: player.rounds.map(r => ({
                     round_number: r.round_number,
@@ -2278,7 +2347,11 @@ class FantasyGolfApp {
                         par: h.par
                     }))
                 }))
-            });
+            };
+            if (player.espn_athlete_id) {
+                entry.espn_athlete_id = player.espn_athlete_id;
+            }
+            playerScores.push(entry);
         });
 
         if (playerScores.length === 0) {
@@ -2295,6 +2368,7 @@ class FantasyGolfApp {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         tournament_id: tournamentId,
+                        espn_tournament_id: rawData.espn_tournament_id || undefined,
                         player_scores: playerScores
                     })
                 }

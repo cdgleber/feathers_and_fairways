@@ -570,6 +570,31 @@
                             <div id="importResultContent"></div>
                         </div>
                     </div>
+
+                    <div class="card full-width" style="margin-top: var(--spacing-md);">
+                        <h3 class="card-title">
+                            <span class="material-icons">refresh</span>
+                            Refresh ESPN Scores
+                        </h3>
+                        <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                            Refresh scores for a tournament that was previously imported via ESPN.
+                        </p>
+                        <div class="form-group">
+                            <label for="refreshTournamentSelect" class="form-label">Tournament</label>
+                            <div style="display: flex; gap: var(--spacing-sm); align-items: flex-start;">
+                                <select id="refreshTournamentSelect" class="form-input" style="flex: 1; max-width: 400px;">
+                                    <option value="">Loading tournaments...</option>
+                                </select>
+                                <button class="btn btn-primary" id="refreshScoresBtn" onclick="app.refreshScores()" disabled>
+                                    <span class="material-icons">refresh</span>
+                                    Refresh Scores
+                                </button>
+                            </div>
+                        </div>
+                        <div id="refreshResultSection" class="hidden" style="margin-top: var(--spacing-md);">
+                            <div id="refreshResultContent"></div>
+                        </div>
+                    </div>
                 </div>
 
                 </div> <!-- Close adminContent -->

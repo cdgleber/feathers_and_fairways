@@ -501,9 +501,24 @@
                             Import Tournament Scores
                         </h3>
                         <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
-                            Upload a <code>tournament.json</code> file from get-golf-scores to automatically match players and import scores.
+                            Import scores from an ESPN tournament ID or upload a <code>tournament.json</code> file from get-golf-scores.
                         </p>
                         <div class="form">
+                            <div class="form-group">
+                                <label for="espnTournamentId" class="form-label">ESPN Tournament ID</label>
+                                <div style="display: flex; gap: var(--spacing-sm); align-items: flex-start;">
+                                    <input type="text" id="espnTournamentId" class="form-input" placeholder="e.g. 401811932" style="flex: 1; max-width: 300px;">
+                                    <button class="btn btn-primary" id="espnFetchBtn" onclick="app.fetchEspnTournament()">
+                                        <span class="material-icons">cloud_download</span>
+                                        Fetch from ESPN
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: var(--spacing-md); margin: var(--spacing-md) 0; color: var(--text-secondary);">
+                                <hr style="flex: 1; border-color: var(--border-color);">
+                                <span>OR</span>
+                                <hr style="flex: 1; border-color: var(--border-color);">
+                            </div>
                             <div class="form-group">
                                 <label for="importFileInput" class="form-label">Tournament File (.json)</label>
                                 <input type="file" id="importFileInput" class="form-input" accept=".json">

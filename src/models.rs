@@ -376,22 +376,20 @@ pub struct ImportTournamentInfo {
     pub name: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ImportPlayer {
     pub slug: String,
     pub name: String,
     pub rounds: Vec<ImportRound>,
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ImportRound {
     pub round_number: i32,
     pub holes: Vec<ImportHole>,
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ImportHole {
     pub hole: i32,
     pub par: i32,
@@ -458,4 +456,107 @@ pub struct ImportCommitHole {
 pub struct ImportCommitResponse {
     pub total_scores_processed: usize,
     pub errors: Vec<String>,
+}
+
+// ESPN Import
+#[derive(Debug, Deserialize)]
+pub struct EspnImportRequest {
+    pub espn_tournament_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EspnEvent {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EspnCompetitorPage {
+    pub page_count: i32,
+    pub items: Vec<EspnCompetitorRef>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EspnCompetitorRef {
+    #[serde(rename = "$ref")]
+    pub href: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+pub struct EspnCompetitor {
+    pub id: String,
+    pub score: Option<EspnScoreRef>,
+    pub linescores: Option<EspnLinescoresRef>,
+    pub athlete: Option<EspnAthleteRef>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct EspnScoreRef {
+    #[serde(rename = "$ref")]
+    pub href: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EspnLinescoresRef {
+    #[serde(rename = "$ref")]
+    pub href: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EspnAthleteRef {
+    #[serde(rename = "$ref")]
+    pub href: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EspnAthlete {
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub short_name: Option<String>,
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EspnLinescores {
+    pub items: Vec<EspnRound>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EspnRound {
+    pub period: i32,
+    pub linescores: Option<EspnRoundLinescores>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EspnRoundLinescores {
+    pub items: Vec<EspnHoleScore>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EspnHoleScore {
+    pub period: i32,
+    pub par: Option<i32>,
+    pub value: Option<i32>,
+}
+
+// Internal struct for transformed ESPN player data
+#[derive(Debug, Serialize, Clone)]
+pub struct EspnPlayerData {
+    pub display_name: String,
+    pub slug: String,
+    pub rounds: Vec<ImportRound>,
+}
+
+// ESPN preview response includes both preview and raw player data for the commit step
+#[derive(Debug, Serialize)]
+pub struct EspnImportPreviewResponse {
+    pub tournament_name: String,
+    pub matched: Vec<ImportMatchedGolfer>,
+    pub unmatched: Vec<ImportUnmatchedGolfer>,
+    pub players: Vec<ImportPlayer>,
 }

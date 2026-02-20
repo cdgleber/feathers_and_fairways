@@ -1397,21 +1397,24 @@ pub async fn get_tournament_stats(
 }
 
 // Tournament Import - Preview
-pub async fn import_preview(
-    State(pool): State<SqlitePool>,
-    Json(payload): Json<ImportTournamentJson>,
-) -> Result<Json<ImportPreviewResponse>, (StatusCode, Json<ApiError>)> {
-    let tournament_name = payload.tournament.name.clone();
+struct PlayerForPreview {
+    name: String,
+    slug: String,
+    rounds_available: Vec<i32>,
+}
+
+async fn build_import_preview(
+    pool: &SqlitePool,
+    tournament_name: String,
+    players: Vec<PlayerForPreview>,
+) -> Result<ImportPreviewResponse, (StatusCode, Json<ApiError>)> {
     let mut matched = Vec::new();
     let mut unmatched = Vec::new();
 
-    for player in &payload.players {
-        let rounds_available: Vec<i32> = player.rounds.iter().map(|r| r.round_number).collect();
-
+    for player in &players {
         // Extract last name (text before first space, e.g. "McIlroy" from "McIlroy R.")
         let last_name = player.name.split_whitespace().next().unwrap_or(&player.name);
 
-        // Fuzzy match: search for golfers whose name contains the last name
         #[derive(sqlx::FromRow)]
         struct GolferMatchRow {
             id: String,
@@ -1423,7 +1426,7 @@ pub async fn import_preview(
             "SELECT id, name, is_amateur FROM golfers WHERE LOWER(name) LIKE '%' || LOWER(?) || '%' AND is_active = 1"
         )
         .bind(last_name)
-        .fetch_all(&pool)
+        .fetch_all(pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
@@ -1434,7 +1437,7 @@ pub async fn import_preview(
                 golfer_id: candidates[0].id.clone(),
                 golfer_name: candidates[0].name.clone(),
                 is_amateur: candidates[0].is_amateur,
-                rounds_available,
+                rounds_available: player.rounds_available.clone(),
             });
         } else {
             unmatched.push(ImportUnmatchedGolfer {
@@ -1444,15 +1447,199 @@ pub async fn import_preview(
                     golfer_id: c.id.clone(),
                     golfer_name: c.name.clone(),
                 }).collect(),
-                rounds_available,
+                rounds_available: player.rounds_available.clone(),
             });
         }
     }
 
-    Ok(Json(ImportPreviewResponse {
+    Ok(ImportPreviewResponse {
         tournament_name,
         matched,
         unmatched,
+    })
+}
+
+pub async fn import_preview(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<ImportTournamentJson>,
+) -> Result<Json<ImportPreviewResponse>, (StatusCode, Json<ApiError>)> {
+    let players: Vec<PlayerForPreview> = payload.players.iter().map(|p| PlayerForPreview {
+        name: p.name.clone(),
+        slug: p.slug.clone(),
+        rounds_available: p.rounds.iter().map(|r| r.round_number).collect(),
+    }).collect();
+
+    let preview = build_import_preview(&pool, payload.tournament.name.clone(), players).await?;
+    Ok(Json(preview))
+}
+
+async fn fetch_espn_competitor(
+    client: &reqwest::Client,
+    competitor_url: &str,
+) -> Result<EspnPlayerData, String> {
+    // Fetch the competitor object (contains $ref links to athlete, linescores, etc.)
+    let competitor: EspnCompetitor = client.get(competitor_url).send().await
+        .map_err(|e| format!("competitor fetch: {}", e))?
+        .json().await
+        .map_err(|e| format!("competitor parse: {}", e))?;
+
+    // Fetch athlete info
+    let athlete_ref = competitor.athlete
+        .ok_or_else(|| "no athlete ref".to_string())?;
+    let athlete: EspnAthlete = client.get(&athlete_ref.href).send().await
+        .map_err(|e| format!("athlete fetch: {}", e))?
+        .json().await
+        .map_err(|e| format!("athlete parse: {}", e))?;
+
+    let display_name = athlete.display_name
+        .or(athlete.short_name)
+        .unwrap_or_else(|| {
+            format!("{} {}",
+                athlete.first_name.as_deref().unwrap_or(""),
+                athlete.last_name.as_deref().unwrap_or("")
+            ).trim().to_string()
+        });
+
+    // Build a slug from the name (lowercase, spaces to hyphens)
+    let slug = display_name.to_lowercase().replace(' ', "-");
+
+    // Fetch linescores
+    let linescores_ref = match competitor.linescores {
+        Some(r) => r,
+        None => return Ok(EspnPlayerData { display_name, slug, rounds: vec![] }),
+    };
+
+    let linescores: EspnLinescores = client.get(&linescores_ref.href).send().await
+        .map_err(|e| format!("linescores fetch: {}", e))?
+        .json().await
+        .map_err(|e| format!("linescores parse: {}", e))?;
+
+    // Transform ESPN rounds into ImportRound format
+    let mut rounds = Vec::new();
+    for espn_round in &linescores.items {
+        let hole_scores = match &espn_round.linescores {
+            Some(ls) => &ls.items,
+            None => continue,
+        };
+
+        // Skip rounds with no valid hole data
+        if hole_scores.is_empty() {
+            continue;
+        }
+
+        let holes: Vec<ImportHole> = hole_scores.iter()
+            .filter_map(|h| {
+                let par = h.par?;
+                let score = h.value?;
+                Some(ImportHole {
+                    hole: h.period,
+                    par,
+                    score,
+                })
+            })
+            .collect();
+
+        if !holes.is_empty() {
+            rounds.push(ImportRound {
+                round_number: espn_round.period,
+                holes,
+            });
+        }
+    }
+
+    Ok(EspnPlayerData { display_name, slug, rounds })
+}
+
+pub async fn import_espn_preview(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<EspnImportRequest>,
+) -> Result<Json<EspnImportPreviewResponse>, (StatusCode, Json<ApiError>)> {
+    let espn_id = &payload.espn_tournament_id;
+    let client = reqwest::Client::new();
+
+    // Fetch tournament event info
+    let event_url = format!(
+        "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/{}?lang=en&region=us",
+        espn_id
+    );
+    let event: EspnEvent = client.get(&event_url).send().await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN request failed: {}", e)))))?
+        .json().await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN parse error: {}", e)))))?;
+
+    // Fetch all competitor pages
+    let mut all_competitor_refs: Vec<String> = Vec::new();
+    let mut page = 1;
+    loop {
+        let comp_url = format!(
+            "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/{}/competitions/{}/competitors?lang=en&region=us&page={}",
+            espn_id, espn_id, page
+        );
+        let comp_page: EspnCompetitorPage = client.get(&comp_url).send().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN request failed: {}", e)))))?
+            .json().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN parse error: {}", e)))))?;
+
+        for item in &comp_page.items {
+            all_competitor_refs.push(item.href.clone());
+        }
+
+        if page >= comp_page.page_count {
+            break;
+        }
+        page += 1;
+    }
+
+    tracing::info!("ESPN: Found {} competitors for event {}", all_competitor_refs.len(), espn_id);
+
+    // Fetch each competitor's details concurrently with semaphore
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(10));
+    let client = std::sync::Arc::new(client);
+    let mut handles = Vec::new();
+
+    for comp_ref in all_competitor_refs {
+        let sem = semaphore.clone();
+        let client = client.clone();
+        let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            fetch_espn_competitor(&client, &comp_ref).await
+        });
+        handles.push(handle);
+    }
+
+    let mut players_for_preview: Vec<PlayerForPreview> = Vec::new();
+    let mut import_players: Vec<ImportPlayer> = Vec::new();
+
+    for handle in handles {
+        match handle.await {
+            Ok(Ok(data)) => {
+                players_for_preview.push(PlayerForPreview {
+                    name: data.display_name.clone(),
+                    slug: data.slug.clone(),
+                    rounds_available: data.rounds.iter().map(|r| r.round_number).collect(),
+                });
+                import_players.push(ImportPlayer {
+                    name: data.display_name,
+                    slug: data.slug,
+                    rounds: data.rounds,
+                });
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("ESPN: Failed to fetch competitor: {}", e);
+            }
+            Err(e) => {
+                tracing::warn!("ESPN: Task join error: {}", e);
+            }
+        }
+    }
+
+    let preview = build_import_preview(&pool, event.name.clone(), players_for_preview).await?;
+
+    Ok(Json(EspnImportPreviewResponse {
+        tournament_name: preview.tournament_name,
+        matched: preview.matched,
+        unmatched: preview.unmatched,
+        players: import_players,
     }))
 }
 

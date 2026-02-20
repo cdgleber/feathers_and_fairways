@@ -2045,6 +2045,55 @@ class FantasyGolfApp {
         reader.readAsText(file);
     }
 
+    async fetchEspnTournament() {
+        const espnId = document.getElementById('espnTournamentId')?.value?.trim();
+        if (!espnId) {
+            this.showToast('Please enter an ESPN tournament ID', 'error');
+            return;
+        }
+
+        const previewSection = document.getElementById('importPreviewSection');
+        const resultSection = document.getElementById('importResultSection');
+        resultSection.classList.add('hidden');
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(
+                `${API_BASE}/admin/tournaments/import/espn-preview`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ espn_tournament_id: espnId })
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                // Store preview data (same shape as file import preview)
+                this.importPreviewData = {
+                    tournament_name: data.tournament_name,
+                    matched: data.matched,
+                    unmatched: data.unmatched,
+                };
+                // Store raw player data so commitImport() can look up rounds by slug
+                this.pendingImportData = {
+                    tournament: { name: data.tournament_name },
+                    players: data.players,
+                };
+                this.displayImportPreview(this.importPreviewData);
+                previewSection.classList.remove('hidden');
+            } else {
+                const error = await response.json();
+                this.showToast(error.message || 'Error fetching ESPN data', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error fetching ESPN data', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
     displayImportPreview(preview) {
         document.getElementById('importTournamentName').textContent = preview.tournament_name;
         document.getElementById('importMatchedCount').textContent = preview.matched.length;

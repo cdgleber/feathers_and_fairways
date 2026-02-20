@@ -363,3 +363,99 @@ pub struct TournamentStats {
     pub best_round_golfer: Option<String>,
     pub best_round_points: Option<i64>,
 }
+
+// Tournament Import (from get-golf-scores tournament.json)
+#[derive(Debug, Deserialize)]
+pub struct ImportTournamentJson {
+    pub tournament: ImportTournamentInfo,
+    pub players: Vec<ImportPlayer>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImportTournamentInfo {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImportPlayer {
+    pub slug: String,
+    pub name: String,
+    pub rounds: Vec<ImportRound>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct ImportRound {
+    pub round_number: i32,
+    pub holes: Vec<ImportHole>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct ImportHole {
+    pub hole: i32,
+    pub par: i32,
+    pub score: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportPreviewResponse {
+    pub tournament_name: String,
+    pub matched: Vec<ImportMatchedGolfer>,
+    pub unmatched: Vec<ImportUnmatchedGolfer>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportMatchedGolfer {
+    pub json_name: String,
+    pub slug: String,
+    pub golfer_id: String,
+    pub golfer_name: String,
+    pub is_amateur: bool,
+    pub rounds_available: Vec<i32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportUnmatchedGolfer {
+    pub json_name: String,
+    pub slug: String,
+    pub candidates: Vec<ImportGolferCandidate>,
+    pub rounds_available: Vec<i32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportGolferCandidate {
+    pub golfer_id: String,
+    pub golfer_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImportCommitRequest {
+    pub tournament_id: String,
+    pub player_scores: Vec<ImportPlayerScore>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImportPlayerScore {
+    pub golfer_id: String,
+    pub rounds: Vec<ImportCommitRound>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImportCommitRound {
+    pub round_number: i32,
+    pub holes: Vec<ImportCommitHole>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ImportCommitHole {
+    pub hole: i32,
+    pub strokes: i32,
+    pub par: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportCommitResponse {
+    pub total_scores_processed: usize,
+    pub errors: Vec<String>,
+}

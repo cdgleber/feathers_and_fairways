@@ -1395,3 +1395,140 @@ pub async fn get_tournament_stats(
         best_round_points: best_round.map(|r| r.round_points),
     }))
 }
+
+// Tournament Import - Preview
+pub async fn import_preview(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<ImportTournamentJson>,
+) -> Result<Json<ImportPreviewResponse>, (StatusCode, Json<ApiError>)> {
+    let tournament_name = payload.tournament.name.clone();
+    let mut matched = Vec::new();
+    let mut unmatched = Vec::new();
+
+    for player in &payload.players {
+        let rounds_available: Vec<i32> = player.rounds.iter().map(|r| r.round_number).collect();
+
+        // Extract last name (text before first space, e.g. "McIlroy" from "McIlroy R.")
+        let last_name = player.name.split_whitespace().next().unwrap_or(&player.name);
+
+        // Fuzzy match: search for golfers whose name contains the last name
+        #[derive(sqlx::FromRow)]
+        struct GolferMatchRow {
+            id: String,
+            name: String,
+            is_amateur: bool,
+        }
+
+        let candidates = sqlx::query_as::<_, GolferMatchRow>(
+            "SELECT id, name, is_amateur FROM golfers WHERE LOWER(name) LIKE '%' || LOWER(?) || '%' AND is_active = 1"
+        )
+        .bind(last_name)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        if candidates.len() == 1 {
+            matched.push(ImportMatchedGolfer {
+                json_name: player.name.clone(),
+                slug: player.slug.clone(),
+                golfer_id: candidates[0].id.clone(),
+                golfer_name: candidates[0].name.clone(),
+                is_amateur: candidates[0].is_amateur,
+                rounds_available,
+            });
+        } else {
+            unmatched.push(ImportUnmatchedGolfer {
+                json_name: player.name.clone(),
+                slug: player.slug.clone(),
+                candidates: candidates.iter().map(|c| ImportGolferCandidate {
+                    golfer_id: c.id.clone(),
+                    golfer_name: c.name.clone(),
+                }).collect(),
+                rounds_available,
+            });
+        }
+    }
+
+    Ok(Json(ImportPreviewResponse {
+        tournament_name,
+        matched,
+        unmatched,
+    }))
+}
+
+// Tournament Import - Commit
+pub async fn import_commit(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<ImportCommitRequest>,
+) -> Result<Json<ImportCommitResponse>, (StatusCode, Json<ApiError>)> {
+    // Verify tournament exists
+    let _tournament = sqlx::query_as::<_, Tournament>(
+        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+    )
+    .bind(&payload.tournament_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+
+    let mut total_processed: usize = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    for player_score in &payload.player_scores {
+        // Look up golfer's amateur status
+        #[derive(sqlx::FromRow)]
+        struct AmateurRow { is_amateur: bool }
+
+        let golfer_row = match sqlx::query_as::<_, AmateurRow>(
+            "SELECT is_amateur FROM golfers WHERE id = ?"
+        )
+        .bind(&player_score.golfer_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))? {
+            Some(row) => row,
+            None => {
+                errors.push(format!("Golfer {} not found", player_score.golfer_id));
+                continue;
+            }
+        };
+
+        for round in &player_score.rounds {
+            if round.round_number < 1 || round.round_number > 4 {
+                errors.push(format!("Golfer {}: round_number {} out of range", player_score.golfer_id, round.round_number));
+                continue;
+            }
+
+            for hole in &round.holes {
+                let score_to_par = hole.strokes - hole.par;
+                let fantasy_points = calculate_fantasy_points(score_to_par, golfer_row.is_amateur);
+                let id = new_id();
+
+                sqlx::query(
+                    "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT (tournament_id, golfer_id, day, hole) \
+                     DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
+                )
+                .bind(&id)
+                .bind(&payload.tournament_id)
+                .bind(&player_score.golfer_id)
+                .bind(round.round_number)
+                .bind(hole.hole)
+                .bind(hole.strokes)
+                .bind(score_to_par)
+                .bind(fantasy_points)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+                total_processed += 1;
+            }
+        }
+    }
+
+    Ok(Json(ImportCommitResponse {
+        total_scores_processed: total_processed,
+        errors,
+    }))
+}

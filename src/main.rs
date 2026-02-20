@@ -109,6 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/tournaments/import/preview", post(routes::import_preview))
             .route("/tournaments/import/espn-preview", post(routes::import_espn_preview))
             .route("/tournaments/import/commit", post(routes::import_commit))
+            .route("/tournaments/:tournament_id/scores/refresh", post(routes::refresh_scores))
             .layer(middleware::from_fn(auth::admin_auth_middleware))
         )
 

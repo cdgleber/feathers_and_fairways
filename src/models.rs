@@ -29,6 +29,7 @@ pub struct Golfer {
     pub win_probability_group: i32,
     pub is_amateur: bool,
     pub is_active: bool,
+    pub espn_id: Option<String>,
     pub created_at: Option<String>,
 }
 
@@ -95,6 +96,7 @@ pub struct Tournament {
     pub start_date: String,
     pub end_date: String,
     pub is_active: bool,
+    pub espn_tournament_id: Option<String>,
     pub created_at: Option<String>,
 }
 
@@ -380,6 +382,7 @@ pub struct ImportTournamentInfo {
 pub struct ImportPlayer {
     pub slug: String,
     pub name: String,
+    pub espn_athlete_id: Option<String>,
     pub rounds: Vec<ImportRound>,
 }
 
@@ -430,12 +433,14 @@ pub struct ImportGolferCandidate {
 #[derive(Debug, Deserialize)]
 pub struct ImportCommitRequest {
     pub tournament_id: String,
+    pub espn_tournament_id: Option<String>,
     pub player_scores: Vec<ImportPlayerScore>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ImportPlayerScore {
     pub golfer_id: String,
+    pub espn_athlete_id: Option<String>,
     pub rounds: Vec<ImportCommitRound>,
 }
 
@@ -515,6 +520,7 @@ pub struct EspnAthleteRef {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EspnAthlete {
+    pub id: Option<String>,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
     pub short_name: Option<String>,
@@ -549,6 +555,7 @@ pub struct EspnHoleScore {
 pub struct EspnPlayerData {
     pub display_name: String,
     pub slug: String,
+    pub espn_athlete_id: Option<String>,
     pub rounds: Vec<ImportRound>,
 }
 
@@ -559,4 +566,12 @@ pub struct EspnImportPreviewResponse {
     pub matched: Vec<ImportMatchedGolfer>,
     pub unmatched: Vec<ImportUnmatchedGolfer>,
     pub players: Vec<ImportPlayer>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RefreshScoresResponse {
+    pub total_scores_processed: usize,
+    pub golfers_updated: usize,
+    pub golfers_skipped: usize,
+    pub errors: Vec<String>,
 }

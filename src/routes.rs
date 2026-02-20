@@ -178,7 +178,7 @@ pub async fn create_golfer(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     let golfer = sqlx::query_as::<_, Golfer>(
-        "SELECT id, name, win_probability_group, is_amateur, is_active, created_at FROM golfers WHERE id = ?"
+        "SELECT id, name, win_probability_group, is_amateur, is_active, espn_id, created_at FROM golfers WHERE id = ?"
     )
     .bind(&id)
     .fetch_one(&pool)
@@ -192,7 +192,7 @@ pub async fn list_golfers(
     State(pool): State<SqlitePool>,
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT id, name, win_probability_group, is_amateur, is_active, created_at FROM golfers WHERE is_active = 1 ORDER BY win_probability_group, name"
+        "SELECT id, name, win_probability_group, is_amateur, is_active, espn_id, created_at FROM golfers WHERE is_active = 1 ORDER BY win_probability_group, name"
     )
     .fetch_all(&pool)
     .await
@@ -208,7 +208,7 @@ pub async fn list_golfers_for_tournament(
     let golfers = sqlx::query_as::<_, Golfer>(
         "SELECT g.id, g.name, \
          COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-         g.is_amateur, g.is_active, g.created_at \
+         g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
          WHERE g.is_active = 1 \
@@ -254,7 +254,7 @@ pub async fn create_team(
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
              COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_amateur, g.is_active, g.created_at \
+             g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
              LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
@@ -338,7 +338,7 @@ pub async fn create_team(
 
     // Fetch team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -372,7 +372,7 @@ pub async fn get_team_golfers(
     Path(team_id): Path<String>,
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -414,7 +414,7 @@ pub async fn create_tournament(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     let tournament = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+        "SELECT id, season_id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
     )
     .bind(&id)
     .fetch_one(&pool)
@@ -429,7 +429,7 @@ pub async fn list_tournaments(
     Path(season_id): Path<String>,
 ) -> Result<Json<Vec<Tournament>>, (StatusCode, Json<ApiError>)> {
     let tournaments = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE season_id = ? ORDER BY start_date DESC"
+        "SELECT id, season_id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE season_id = ? ORDER BY start_date DESC"
     )
     .bind(&season_id)
     .fetch_all(&pool)
@@ -720,7 +720,7 @@ pub async fn upload_tournament_golfer_groups(
 ) -> Result<Json<TournamentGolferGroupUploadResponse>, (StatusCode, Json<ApiError>)> {
     // Verify tournament exists
     let _tournament = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+        "SELECT id, season_id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
     )
     .bind(&tournament_id)
     .fetch_optional(&pool)
@@ -881,7 +881,7 @@ pub async fn update_team(
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
              COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_amateur, g.is_active, g.created_at \
+             g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
              LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
@@ -936,7 +936,7 @@ pub async fn update_team(
 
     // Fetch updated team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -993,7 +993,7 @@ pub async fn admin_update_team_golfers(
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
              COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_amateur, g.is_active, g.created_at \
+             g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
              LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
@@ -1046,7 +1046,7 @@ pub async fn admin_update_team_golfers(
 
     // Fetch updated team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -1076,7 +1076,7 @@ pub async fn upload_tournament_scores(
 
     // Verify tournament exists
     let _tournament = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+        "SELECT id, season_id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
     )
     .bind(&tournament_id)
     .fetch_optional(&pool)
@@ -1491,6 +1491,8 @@ async fn fetch_espn_competitor(
         .json().await
         .map_err(|e| format!("athlete parse: {}", e))?;
 
+    let espn_athlete_id = athlete.id.clone();
+
     let display_name = athlete.display_name
         .or(athlete.short_name)
         .unwrap_or_else(|| {
@@ -1506,7 +1508,7 @@ async fn fetch_espn_competitor(
     // Fetch linescores
     let linescores_ref = match competitor.linescores {
         Some(r) => r,
-        None => return Ok(EspnPlayerData { display_name, slug, rounds: vec![] }),
+        None => return Ok(EspnPlayerData { display_name, slug, espn_athlete_id, rounds: vec![] }),
     };
 
     let linescores: EspnLinescores = client.get(&linescores_ref.href).send().await
@@ -1547,7 +1549,7 @@ async fn fetch_espn_competitor(
         }
     }
 
-    Ok(EspnPlayerData { display_name, slug, rounds })
+    Ok(EspnPlayerData { display_name, slug, espn_athlete_id, rounds })
 }
 
 pub async fn import_espn_preview(
@@ -1621,6 +1623,7 @@ pub async fn import_espn_preview(
                 import_players.push(ImportPlayer {
                     name: data.display_name,
                     slug: data.slug,
+                    espn_athlete_id: data.espn_athlete_id,
                     rounds: data.rounds,
                 });
             }
@@ -1650,7 +1653,7 @@ pub async fn import_commit(
 ) -> Result<Json<ImportCommitResponse>, (StatusCode, Json<ApiError>)> {
     // Verify tournament exists
     let _tournament = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+        "SELECT id, season_id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
     )
     .bind(&payload.tournament_id)
     .fetch_optional(&pool)
@@ -1658,10 +1661,30 @@ pub async fn import_commit(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
     .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
 
+    // Store ESPN tournament ID if provided
+    if let Some(ref espn_tid) = payload.espn_tournament_id {
+        sqlx::query("UPDATE tournaments SET espn_tournament_id = ? WHERE id = ?")
+            .bind(espn_tid)
+            .bind(&payload.tournament_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+    }
+
     let mut total_processed: usize = 0;
     let mut errors: Vec<String> = Vec::new();
 
     for player_score in &payload.player_scores {
+        // Store ESPN athlete ID on golfer if provided and not already set
+        if let Some(ref espn_aid) = player_score.espn_athlete_id {
+            sqlx::query("UPDATE golfers SET espn_id = ? WHERE id = ? AND espn_id IS NULL")
+                .bind(espn_aid)
+                .bind(&player_score.golfer_id)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+        }
+
         // Look up golfer's amateur status
         #[derive(sqlx::FromRow)]
         struct AmateurRow { is_amateur: bool }
@@ -1716,6 +1739,164 @@ pub async fn import_commit(
 
     Ok(Json(ImportCommitResponse {
         total_scores_processed: total_processed,
+        errors,
+    }))
+}
+
+// Refresh scores from ESPN for a tournament
+pub async fn refresh_scores(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+) -> Result<Json<RefreshScoresResponse>, (StatusCode, Json<ApiError>)> {
+    // Look up tournament and get espn_tournament_id
+    let tournament = sqlx::query_as::<_, Tournament>(
+        "SELECT id, season_id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
+    )
+    .bind(&tournament_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+
+    let espn_id = tournament.espn_tournament_id
+        .ok_or((StatusCode::BAD_REQUEST, Json(ApiError::new("Tournament has no ESPN tournament ID. Import via ESPN first."))))?;
+
+    // Load all golfers with espn_id into a HashMap<espn_id, (golfer_id, is_amateur)>
+    #[derive(sqlx::FromRow)]
+    struct GolferEspnRow {
+        id: String,
+        espn_id: String,
+        is_amateur: bool,
+    }
+
+    let golfer_rows = sqlx::query_as::<_, GolferEspnRow>(
+        "SELECT id, espn_id, is_amateur FROM golfers WHERE espn_id IS NOT NULL"
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let golfer_map: std::collections::HashMap<String, (String, bool)> = golfer_rows
+        .into_iter()
+        .map(|r| (r.espn_id, (r.id, r.is_amateur)))
+        .collect();
+
+    // Fetch ESPN competitors (same pagination as import_espn_preview)
+    let client = reqwest::Client::new();
+    let mut all_competitor_refs: Vec<String> = Vec::new();
+    let mut page = 1;
+    loop {
+        let comp_url = format!(
+            "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/{}/competitions/{}/competitors?lang=en&region=us&page={}",
+            espn_id, espn_id, page
+        );
+        let comp_page: EspnCompetitorPage = client.get(&comp_url).send().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN request failed: {}", e)))))?
+            .json().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN parse error: {}", e)))))?;
+
+        for item in &comp_page.items {
+            all_competitor_refs.push(item.href.clone());
+        }
+
+        if page >= comp_page.page_count {
+            break;
+        }
+        page += 1;
+    }
+
+    tracing::info!("ESPN refresh: Found {} competitors for event {}", all_competitor_refs.len(), espn_id);
+
+    // Fetch each competitor concurrently
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(10));
+    let client = std::sync::Arc::new(client);
+    let mut handles = Vec::new();
+
+    for comp_ref in all_competitor_refs {
+        let sem = semaphore.clone();
+        let client = client.clone();
+        let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            fetch_espn_competitor(&client, &comp_ref).await
+        });
+        handles.push(handle);
+    }
+
+    let mut total_processed: usize = 0;
+    let mut golfers_updated: usize = 0;
+    let mut golfers_skipped: usize = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    for handle in handles {
+        let data = match handle.await {
+            Ok(Ok(data)) => data,
+            Ok(Err(e)) => {
+                errors.push(format!("ESPN fetch error: {}", e));
+                continue;
+            }
+            Err(e) => {
+                errors.push(format!("Task join error: {}", e));
+                continue;
+            }
+        };
+
+        // Match by ESPN athlete ID
+        let espn_athlete_id = match &data.espn_athlete_id {
+            Some(id) => id,
+            None => {
+                golfers_skipped += 1;
+                continue;
+            }
+        };
+
+        let (golfer_id, is_amateur) = match golfer_map.get(espn_athlete_id) {
+            Some(entry) => entry.clone(),
+            None => {
+                golfers_skipped += 1;
+                continue;
+            }
+        };
+
+        if data.rounds.is_empty() {
+            golfers_skipped += 1;
+            continue;
+        }
+
+        // Upsert scores for this golfer
+        for round in &data.rounds {
+            for hole in &round.holes {
+                let score_to_par = hole.score - hole.par;
+                let fantasy_points = calculate_fantasy_points(score_to_par, is_amateur);
+                let id = new_id();
+
+                sqlx::query(
+                    "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT (tournament_id, golfer_id, day, hole) \
+                     DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
+                )
+                .bind(&id)
+                .bind(&tournament_id)
+                .bind(&golfer_id)
+                .bind(round.round_number)
+                .bind(hole.hole)
+                .bind(hole.score)
+                .bind(score_to_par)
+                .bind(fantasy_points)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+                total_processed += 1;
+            }
+        }
+        golfers_updated += 1;
+    }
+
+    Ok(Json(RefreshScoresResponse {
+        total_scores_processed: total_processed,
+        golfers_updated,
+        golfers_skipped,
         errors,
     }))
 }

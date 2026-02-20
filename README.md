@@ -1,316 +1,224 @@
 # Feathers & Fairways
 
+A fantasy golf league management application. Commissioners manage seasons and tournaments, players create teams using access keys, and the system tracks scores and leaderboards.
+
 ## Features
 
 ### For Players
+
 - **Team Creation**: Join the league with a unique access key provided by the commissioner
-- **Strategic Selection**: Choose 6 golfers - one from each skill tier (based on win probability)
-- **Real-time Leaderboards**: Track season standings and tournament-specific scores
-- **Responsive Design**: Beautiful Material Design interface that works on all devices
+- **Strategic Selection**: Choose 9 golfers — one from each skill tier (groups 1–9 based on win probability)
+- **Team Updates**: Modify your team roster before a tournament's start date
+- **Real-time Leaderboards**: Track season standings, tournament-specific scores, and detailed breakdowns
+- **Tournament History**: View completed tournaments with team leaderboards and stats
+- **Responsive Design**: Material Design interface with dark mode support
 
 ### For Commissioners
-- **Season Management**: Create and manage golf seasons
-- **Access Key Generation**: Generate unique keys for players to join
-- **Golfer Database**: Add golfers grouped by win probability (1-6)
+
+- **Season Management**: Create and manage golf seasons (one active at a time)
+- **Access Key Generation**: Generate unique single-use keys for players to join
+- **Golfer Database**: Add golfers grouped by win probability (groups 1–9), with amateur flag support
 - **Tournament Creation**: Set up tournaments throughout the season
-- **Score Entry**: Record hole-by-hole results for accurate fantasy points
+- **Score Entry**: Record hole-by-hole results via manual entry or bulk JSON upload
+- **Tournament Import**: Preview and import tournament data (scores, groups) in one step
+- **Per-Tournament Groups**: Override default golfer groups on a per-tournament basis
+- **Team Editor**: View and edit team golfer selections from the admin panel
+- **Database Stats**: View database statistics from the admin panel
+- **Tabbed Admin Panel**: Organized interface with tabs for scores, teams, golfer management, and tournament import
 
 ### Scoring System
+
 - **Eagle or better**: +2 points
 - **Birdie**: +1 point
 - **Par**: 0 points
-- **Bogey or worse**: -1 point
+- **Bogey or worse**: -1 point (amateurs score 0 instead — they cannot receive negative fantasy points)
 
 ## Tech Stack
 
 ### Backend
-- **Rust** with Axum web framework
-- **SQLx** for compile-time checked database queries
-- **PostgreSQL** 16 for data persistence
-- **Tower** for middleware and services
+
+- **Rust** (edition 2021) with **Axum** 0.7 web framework
+- **SQLx** 0.7 for runtime-checked database queries (not compile-time macros)
+- **SQLite** with WAL mode and foreign keys enabled
+- **Tower** middleware for auth and tracing
+- **JWT** (jsonwebtoken, HS256, 60-min expiry) + Basic auth for admin routes
 
 ### Frontend
-- **Vanilla JavaScript** (ES6+)
-- **Material Design** principles
-- **Google Fonts** (Inter) and Material Icons
-- **Responsive CSS Grid/Flexbox**
+
+- **Vanilla JavaScript** (ES6+) — single-page app with view switching via DOM manipulation
+- **Material Design** styling with **Google Fonts** (Inter) and Material Icons
+- **Dark mode** support
+- **Responsive CSS** Grid/Flexbox
+- No build step — edit files in `dist/` directly
 
 ## Project Structure
 
 ```
-fantasy-golf/
+feathers_and_fairways/
 ├── src/
-│   ├── main.rs           # Application entry point and server setup
-│   ├── models.rs         # Data structures and types
-│   ├── routes.rs         # API endpoint handlers
-│   └── db.rs             # Database utilities
-├── migrations/           # SQLx database migrations
-│   ├── 20240101000001_create_seasons.sql
-│   ├── 20240101000002_create_golfers.sql
-│   ├── 20240101000003_create_access_keys.sql
-│   ├── 20240101000004_create_teams.sql
-│   ├── 20240101000005_create_team_golfers.sql
-│   ├── 20240101000006_create_tournaments.sql
-│   └── 20240101000007_create_hole_scores.sql
+│   ├── main.rs           # Entry point, SQLite pool, migrations, Axum router
+│   ├── routes.rs         # All API handlers with inline business logic
+│   ├── models.rs         # DB entities (FromRow) and request types (Deserialize, Validate)
+│   ├── auth.rs           # JWT/Basic auth middleware for admin routes
+│   └── db.rs             # Access key generation utility
+├── migrations/           # 10 sequential SQLite migrations (01–10)
 ├── dist/                 # Frontend static files
 │   ├── index.html
-│   ├── css/
-│   │   └── styles.css
-│   └── js/
-│       └── app.js
-├── Cargo.toml           # Rust dependencies
-├── Dockerfile           # Docker build configuration
-├── docker-compose.yml   # Docker Compose orchestration
-└── .env                 # Environment variables (create from .env.example)
+│   ├── css/styles.css
+│   ├── js/app.js
+│   └── favicons/
+├── example_jsons/        # Example JSON request bodies for admin API endpoints
+├── seed_data.sql         # SQL seed data for development/testing
+├── Cargo.toml
+├── Dockerfile
+├── docker-compose.yml
+└── .env                  # Environment variables (not committed)
 ```
 
 ## Prerequisites
 
 - **Rust** 1.75+ (with Cargo)
-- **PostgreSQL** 16+
-- **Docker** and **Docker Compose** (for containerized deployment)
-- **SQLx CLI** (for migrations): `cargo install sqlx-cli --no-default-features --features postgres`
 
-## Setup Instructions
-
-### Option 1: Local Development
+## Setup
 
 1. **Clone the repository**
+
    ```bash
-   cd fantasy-golf
+   git clone <repo-url>
+   cd feathers_and_fairways
    ```
 
-2. **Set up PostgreSQL**
-   ```bash
-   # Start PostgreSQL on localhost:5432
-   # Create database
-   createdb fantasy_golf
-   ```
+2. **Configure environment variables**
 
-3. **Configure environment variables**
+   Create a `.env` file:
+
    ```bash
-   # .env file is already created with defaults
-   # Modify if needed:
-   DATABASE_URL=postgres://postgres:postgres@localhost:5432/fantasy_golf
+   DATABASE_URL=sqlite:feathers_and_fairways.db
    RUST_LOG=debug
    HOST=0.0.0.0
-   PORT=3000
+   PORT=41549
+   ADMIN_PASSWORD=your_secure_password_here
    ```
 
-4. **Run database migrations**
-   ```bash
-   sqlx migrate run
-   ```
+   `ADMIN_PASSWORD` is required — there is no default fallback.
 
-5. **Build and run the application**
+3. **Build and run**
+
    ```bash
-   # Development mode
+   # Development
    cargo run
 
-   # Production mode (optimized)
+   # Production (optimized with LTO)
    cargo build --release
-   ./target/release/fantasy-golf
+   ./target/release/feathers_and_fairways
    ```
 
-6. **Access the application**
-   - Open your browser to `http://localhost:3000`
+   The SQLite database is created automatically on first run. Migrations run automatically at startup.
 
-### Option 2: Docker Deployment (Recommended)
-
-1. **Build and start all services**
-   ```bash
-   docker-compose up -d
-   ```
-
-   This will:
-   - Start PostgreSQL on port 5432
-   - Build the Rust application
-   - Run database migrations automatically
-   - Start the web server on port 3000
-
-2. **View logs**
-   ```bash
-   docker-compose logs -f app
-   ```
-
-3. **Stop services**
-   ```bash
-   docker-compose down
-   ```
-
-4. **Complete teardown (including data)**
-   ```bash
-   docker-compose down -v
-   ```
+4. **Access the application**
+   - Open your browser to `http://localhost:41549`
 
 ## API Endpoints
 
-### Seasons
-- `POST /api/seasons` - Create a new season
-- `GET /api/seasons` - List all seasons
-- `GET /api/seasons/active` - Get the active season
+### Public
 
-### Access Keys
-- `POST /api/access-keys` - Generate access keys (commissioner only)
-- `POST /api/access-keys/validate` - Validate an access key
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/seasons` | List all seasons |
+| GET | `/api/seasons/active` | Get the active season |
+| GET | `/api/golfers` | List all active golfers |
+| GET | `/api/golfers/tournament/:tournament_id` | List golfers for a tournament (with group overrides) |
+| POST | `/api/teams` | Create a team |
+| POST | `/api/teams/update` | Update team golfers |
+| GET | `/api/teams/:season_id` | List teams in a season |
+| GET | `/api/teams/:team_id/golfers` | Get team's golfers |
+| GET | `/api/tournaments/:season_id` | List tournaments in a season |
+| GET | `/api/tournaments/:season_id/completed` | List completed tournaments |
+| GET | `/api/tournaments/:tournament_id/stats` | Get tournament statistics |
+| GET | `/api/scores/tournament/:tournament_id` | Get tournament scores |
+| GET | `/api/leaderboard/:season_id` | Season leaderboard |
+| GET | `/api/leaderboard/:season_id/detailed` | Season leaderboard with golfer details |
+| GET | `/api/leaderboard/tournament/:tournament_id` | Tournament leaderboard |
+| GET | `/api/leaderboard/tournament/:tournament_id/teams` | Tournament team leaderboard |
+| POST | `/api/access-keys/validate` | Validate an access key |
 
-### Golfers
-- `POST /api/golfers` - Add a new golfer
-- `GET /api/golfers` - List all active golfers
+### Admin (JWT or Basic auth required)
 
-### Teams
-- `POST /api/teams` - Create a team with golfer selection
-- `GET /api/teams/:season_id` - List teams in a season
-- `GET /api/teams/:team_id/golfers` - Get team's golfers
-
-### Tournaments
-- `POST /api/tournaments` - Create a tournament
-- `GET /api/tournaments/:season_id` - List tournaments in a season
-
-### Scores
-- `POST /api/scores` - Add hole scores
-- `GET /api/scores/tournament/:tournament_id` - Get tournament scores
-
-### Leaderboards
-- `GET /api/leaderboard/:season_id` - Season leaderboard
-- `GET /api/leaderboard/tournament/:tournament_id` - Tournament leaderboard
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/admin/login` | Login (returns JWT token) |
+| POST | `/api/admin/seasons` | Create a season |
+| POST | `/api/admin/access-keys` | Generate access keys |
+| POST | `/api/admin/golfers` | Add a golfer |
+| POST | `/api/admin/golfers/upload` | Bulk upload golfers (JSON array) |
+| POST | `/api/admin/tournaments` | Create a tournament |
+| POST | `/api/admin/scores` | Add hole scores |
+| POST | `/api/admin/tournaments/:id/scores/upload` | Bulk upload tournament scores |
+| POST | `/api/admin/tournaments/:id/groups/upload` | Upload per-tournament golfer groups |
+| GET | `/api/admin/tournaments/:id/teams` | List teams for a tournament |
+| PUT | `/api/admin/teams/:team_id/golfers` | Edit team golfer selections |
+| GET | `/api/admin/stats` | Database statistics |
+| POST | `/api/admin/tournaments/import/preview` | Preview tournament import |
+| POST | `/api/admin/tournaments/import/commit` | Commit tournament import |
 
 ## Usage Guide
 
 ### For Commissioners
 
-1. **Initial Setup**
-   - Navigate to the Admin panel
-   - Create a new season with name, year, and date range
-   - Add golfers to the database (organized in 6 groups by win probability)
-
-2. **Invite Players**
-   - Generate access keys in the Admin panel
-   - Distribute keys to players via email or messaging
-   - Each key can be used once to create a team
-
-3. **Manage Tournaments**
-   - Create tournaments throughout the season
-   - Enter hole scores after each round
-   - Scores are automatically converted to fantasy points
+1. **Initial Setup** — Navigate to the Admin panel, log in with your admin password, create a season, and add golfers (organized in 9 groups by win probability)
+2. **Invite Players** — Generate access keys and distribute them to players. Each key is single-use.
+3. **Manage Tournaments** — Create tournaments, enter scores (manually or via bulk upload), and optionally override golfer groups per tournament
+4. **Import Tournaments** — Use the tournament import tab to preview and import tournament data in one step
 
 ### For Players
 
-1. **Join the League**
-   - Click "Join League" in the navigation
-   - Enter your unique access key
-   - Enter your name
-
-2. **Build Your Team**
-   - Select one golfer from each of the 6 skill groups
-   - Consider balancing high-risk, high-reward picks with consistent performers
-   - Submit your team (teams cannot be changed once created)
-
-3. **Track Your Progress**
-   - View the leaderboard to see season standings
-   - Check tournament-specific scores
-   - Watch your position change as tournaments progress
+1. **Join the League** — Click "Join League", enter your access key and name
+2. **Build Your Team** — Select one golfer from each of the 9 skill groups
+3. **Track Progress** — View the season leaderboard, tournament scores, and completed tournament history
 
 ## Database Schema
 
-### Core Tables
-- **seasons**: Golf seasons with date ranges
-- **golfers**: Professional golfers grouped by win probability (1-6)
-- **access_keys**: Unique keys for player registration
-- **teams**: Player teams linked to a season
-- **team_golfers**: Junction table (team ↔ golfers)
-- **tournaments**: Individual tournaments within a season
-- **hole_scores**: Per-hole scoring data
+### Tables
 
-### Automatic Features
-- Fantasy points calculated automatically via PostgreSQL triggers
-- Team validation ensures exactly 6 golfers (one per group)
-- Unique constraints prevent duplicate selections
+- **seasons** — Golf seasons with date ranges and active flag
+- **golfers** — Golfers with group assignment (1–9) and amateur flag
+- **access_keys** — Single-use keys for player registration
+- **tournaments** — Tournaments within a season with start/end dates
+- **teams** — Player teams linked to a season (optional email)
+- **team_golfers** — Junction table (team ↔ golfers)
+- **hole_scores** — Per-hole scoring data with fantasy points
+- **tournament_golfer_groups** — Per-tournament golfer group overrides
 
-## Development
+### Key Design Decisions
 
-### Running Tests
-```bash
-cargo test
-```
+- UUIDs as TEXT primary keys (generated in Rust, not DB)
+- Fantasy points calculated in Rust application code (not DB triggers)
+- Booleans stored as INTEGER (0/1)
+- Dates stored as TEXT in ISO format
+- Team golfer limit (max 9, one per group) enforced in application code
 
-### Database Migrations
+## Security
 
-Create a new migration:
-```bash
-sqlx migrate add <migration_name>
-```
-
-Run migrations:
-```bash
-sqlx migrate run
-```
-
-Revert last migration:
-```bash
-sqlx migrate revert
-```
-
-### SQLx Offline Mode
-
-For CI/CD or offline compilation:
-```bash
-# Generate query metadata
-cargo sqlx prepare
-
-# Build with offline mode
-cargo build --release
-```
-
-## Performance Considerations
-
-- Connection pooling configured for 5 concurrent connections
-- Database indexes on frequently queried columns
-- Compiled queries via SQLx macros (zero runtime overhead)
-- Optimized production build with LTO
-
-## Security Notes
-
-- Use strong passwords for PostgreSQL in production
-- Consider implementing authentication for admin routes
-- Access keys provide basic authorization
+- Admin routes protected by JWT (60-min expiry) or Basic auth
+- `ADMIN_PASSWORD` env var required — no default fallback
+- Access keys provide player authorization
 - HTTPS recommended for production deployment
-- Environment variables should not be committed to version control
+- `.env` file is gitignored
 
 ## Troubleshooting
 
-### Database Connection Issues
-```bash
-# Check PostgreSQL is running
-pg_isready -h localhost -p 5432
+### Database Issues
 
-# Test connection
-psql -h localhost -U postgres -d fantasy_golf
+The SQLite database file is created automatically. If you need to reset:
+
+```bash
+# Delete the database and restart — migrations will recreate it
+rm feathers_and_fairways.db
+cargo run
 ```
 
-### Migration Errors
+### Running Tests
+
 ```bash
-# Check migration status
-sqlx migrate info
-
-# Force reset (WARNING: destroys data)
-sqlx database reset
+cargo test
 ```
-
-### Docker Issues
-```bash
-# Rebuild containers
-docker-compose up --build
-
-# Check container logs
-docker-compose logs app
-docker-compose logs postgres
-```
-
-## Future Enhancements
-
-- [ ] Player authentication system
-- [ ] Real-time score updates via WebSockets
-- [ ] Advanced analytics and statistics
-- [ ] Email notifications for tournaments
-- [ ] Integration with live golf APIs

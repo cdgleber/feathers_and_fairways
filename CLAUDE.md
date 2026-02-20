@@ -18,7 +18,7 @@ Feathers & Fairways is a fantasy golf league management application. Commissione
 ```bash
 cargo build                    # Debug build
 cargo build --release          # Release build (LTO enabled)
-cargo run                      # Run dev server (port 3000)
+cargo run                      # Run dev server (port 41549)
 cargo test                     # Run tests
 ```
 
@@ -57,7 +57,7 @@ Public: `/api/seasons`, `/api/seasons/active`, `/api/golfers`, `/api/golfers/tou
 
 Login (unprotected): `/api/admin/login` — returns JWT token
 
-Protected (admin auth middleware via `/api/admin` nest): `/api/admin/seasons`, `/api/admin/access-keys`, `/api/admin/golfers`, `/api/admin/golfers/upload`, `/api/admin/tournaments`, `/api/admin/tournaments/:tournament_id/scores/upload`, `/api/admin/tournaments/:tournament_id/groups/upload`, `/api/admin/scores`, `/api/admin/stats`
+Protected (admin auth middleware via `/api/admin` nest): `/api/admin/seasons`, `/api/admin/access-keys`, `/api/admin/golfers`, `/api/admin/golfers/upload`, `/api/admin/tournaments`, `/api/admin/tournaments/:tournament_id/scores/upload`, `/api/admin/tournaments/:tournament_id/groups/upload`, `/api/admin/tournaments/:tournament_id/teams`, `/api/admin/teams/:team_id/golfers` (PUT), `/api/admin/scores`, `/api/admin/stats`, `/api/admin/tournaments/import/preview`, `/api/admin/tournaments/import/commit`
 
 ## Key Business Rules
 

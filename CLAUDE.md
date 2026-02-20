@@ -8,7 +8,7 @@ Feathers & Fairways is a fantasy golf league management application. Commissione
 
 ## Tech Stack
 
-- **Backend**: Rust (edition 2021), Axum 0.7, Tokio, SQLx 0.7 (runtime queries)
+- **Backend**: Rust (edition 2021), Axum 0.7, Tokio, SQLx 0.7 (runtime queries), reqwest 0.12 (ESPN API)
 - **Database**: SQLite (WAL mode, foreign keys enabled)
 - **Frontend**: Vanilla HTML/CSS/JS served as static files from `dist/`
 - **Auth**: JWT (jsonwebtoken) + Basic auth middleware for admin routes
@@ -57,7 +57,7 @@ Public: `/api/seasons`, `/api/seasons/active`, `/api/golfers`, `/api/golfers/tou
 
 Login (unprotected): `/api/admin/login` — returns JWT token
 
-Protected (admin auth middleware via `/api/admin` nest): `/api/admin/seasons`, `/api/admin/access-keys`, `/api/admin/golfers`, `/api/admin/golfers/upload`, `/api/admin/tournaments`, `/api/admin/tournaments/:tournament_id/scores/upload`, `/api/admin/tournaments/:tournament_id/groups/upload`, `/api/admin/tournaments/:tournament_id/teams`, `/api/admin/teams/:team_id/golfers` (PUT), `/api/admin/scores`, `/api/admin/stats`, `/api/admin/tournaments/import/preview`, `/api/admin/tournaments/import/commit`
+Protected (admin auth middleware via `/api/admin` nest): `/api/admin/seasons`, `/api/admin/access-keys`, `/api/admin/golfers`, `/api/admin/golfers/upload`, `/api/admin/tournaments`, `/api/admin/tournaments/:tournament_id/scores/upload`, `/api/admin/tournaments/:tournament_id/groups/upload`, `/api/admin/tournaments/:tournament_id/teams`, `/api/admin/teams/:team_id/golfers` (PUT), `/api/admin/scores`, `/api/admin/stats`, `/api/admin/tournaments/import/preview`, `/api/admin/tournaments/import/espn-preview`, `/api/admin/tournaments/import/commit`
 
 ## Key Business Rules
 
@@ -67,6 +67,7 @@ Protected (admin auth middleware via `/api/admin` nest): `/api/admin/seasons`, `
 - Leaderboard sums fantasy_points across all tournaments in a season using LEFT JOINs.
 - Admin login returns a JWT (60-min expiry); `ADMIN_PASSWORD` env var is required (no default fallback).
 - Bulk upload endpoints support JSON arrays for golfers, scores, and tournament golfer groups.
+- ESPN tournament import: backend fetches data from ESPN's core API (`sports.core.api.espn.com`), transforms it into the standard import format, and feeds it through the existing preview/commit flow. Uses `reqwest` with `tokio::sync::Semaphore(10)` for concurrency-limited parallel fetching.
 
 ## Additional Files
 

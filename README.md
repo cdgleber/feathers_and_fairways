@@ -20,7 +20,7 @@ A fantasy golf league management application. Commissioners manage seasons and t
 - **Golfer Database**: Add golfers grouped by win probability (groups 1–9), with amateur flag support
 - **Tournament Creation**: Set up tournaments throughout the season
 - **Score Entry**: Record hole-by-hole results via manual entry or bulk JSON upload
-- **Tournament Import**: Preview and import tournament data (scores, groups) in one step
+- **Tournament Import**: Preview and import tournament data from a JSON file or directly from ESPN by tournament ID
 - **Per-Tournament Groups**: Override default golfer groups on a per-tournament basis
 - **Team Editor**: View and edit team golfer selections from the admin panel
 - **Database Stats**: View database statistics from the admin panel
@@ -38,6 +38,7 @@ A fantasy golf league management application. Commissioners manage seasons and t
 ### Backend
 
 - **Rust** (edition 2021) with **Axum** 0.7 web framework
+- **reqwest** 0.12 for ESPN API integration
 - **SQLx** 0.7 for runtime-checked database queries (not compile-time macros)
 - **SQLite** with WAL mode and foreign keys enabled
 - **Tower** middleware for auth and tracing
@@ -158,7 +159,8 @@ feathers_and_fairways/
 | GET | `/api/admin/tournaments/:id/teams` | List teams for a tournament |
 | PUT | `/api/admin/teams/:team_id/golfers` | Edit team golfer selections |
 | GET | `/api/admin/stats` | Database statistics |
-| POST | `/api/admin/tournaments/import/preview` | Preview tournament import |
+| POST | `/api/admin/tournaments/import/preview` | Preview tournament import (JSON file) |
+| POST | `/api/admin/tournaments/import/espn-preview` | Preview tournament import (ESPN API) |
 | POST | `/api/admin/tournaments/import/commit` | Commit tournament import |
 
 ## Usage Guide

@@ -3,26 +3,6 @@ use sqlx::FromRow;
 use validator::Validate;
 
 #[derive(Debug, Serialize, FromRow)]
-pub struct Season {
-    pub id: String,
-    pub name: String,
-    pub year: i32,
-    pub start_date: String,
-    pub end_date: String,
-    pub is_active: bool,
-    pub created_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Validate)]
-pub struct CreateSeasonRequest {
-    #[validate(length(min = 1, max = 255))]
-    pub name: String,
-    pub year: i32,
-    pub start_date: String,
-    pub end_date: String,
-}
-
-#[derive(Debug, Serialize, FromRow)]
 pub struct Golfer {
     pub id: String,
     pub name: String,
@@ -46,7 +26,7 @@ pub struct CreateGolferRequest {
 pub struct AccessKey {
     pub id: String,
     pub key_code: String,
-    pub season_id: String,
+    pub tournament_id: String,
     pub player_name: Option<String>,
     pub is_used: bool,
     pub used_at: Option<String>,
@@ -55,7 +35,7 @@ pub struct AccessKey {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateAccessKeysRequest {
-    pub season_id: String,
+    pub tournament_id: String,
     pub count: i32,
 }
 
@@ -67,17 +47,16 @@ pub struct ValidateAccessKeyRequest {
 #[derive(Debug, Serialize)]
 pub struct AccessKeyValidationResponse {
     pub valid: bool,
-    pub season_id: Option<String>,
+    pub tournament_id: Option<String>,
     pub already_used: bool,
 }
 
 #[derive(Debug, Serialize, FromRow)]
 pub struct Team {
     pub id: String,
-    pub season_id: String,
-    pub tournament_id: Option<String>,
+    pub tournament_id: String,
     pub player_name: String,
-    pub access_key_id: String,
+    pub access_key_id: Option<String>,
     pub email: Option<String>,
     pub created_at: Option<String>,
 }
@@ -91,7 +70,6 @@ pub struct TeamWithGolfers {
 #[derive(Debug, Serialize, FromRow)]
 pub struct Tournament {
     pub id: String,
-    pub season_id: String,
     pub name: String,
     pub start_date: String,
     pub end_date: String,
@@ -102,7 +80,6 @@ pub struct Tournament {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateTournamentRequest {
-    pub season_id: String,
     #[validate(length(min = 1, max = 255))]
     pub name: String,
     pub start_date: String,
@@ -154,27 +131,12 @@ pub struct CreateTeamRequest {
     pub email: Option<String>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
-pub struct LeaderboardEntry {
-    pub player_name: String,
-    pub team_id: String,
-    pub total_points: Option<i64>,
-}
-
 #[derive(Debug, Serialize, Clone)]
 pub struct GolferSummary {
     pub id: String,
     pub name: String,
     pub win_probability_group: i32,
     pub is_amateur: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct LeaderboardEntryWithGolfers {
-    pub player_name: String,
-    pub team_id: String,
-    pub total_points: i64,
-    pub golfers: Vec<GolferSummary>,
 }
 
 #[derive(Debug, FromRow)]
@@ -225,64 +187,6 @@ pub struct UpdateTeamRequest {
     pub golfer_ids: Vec<String>,
 }
 
-// JSON Score Upload
-#[derive(Debug, Deserialize)]
-pub struct ScoreUploadEntry {
-    pub golfer: String,
-    pub day: i32,
-    pub holes: Vec<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ScoreUploadRequest {
-    pub pars: Vec<i32>,
-    pub scores: Vec<ScoreUploadEntry>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ScoreUploadResponse {
-    pub total_scores_processed: usize,
-    pub errors: Vec<String>,
-}
-
-// JSON Golfer Upload
-#[derive(Debug, Deserialize)]
-pub struct GolferUploadEntry {
-    pub name: String,
-    pub group: i32,
-    pub amateur: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct GolferUploadRequest {
-    pub golfers: Vec<GolferUploadEntry>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GolferUploadResponse {
-    pub total_created: usize,
-    pub total_updated: usize,
-    pub errors: Vec<String>,
-}
-
-// Tournament Golfer Groups
-#[derive(Debug, Deserialize)]
-pub struct TournamentGolferGroupUploadEntry {
-    pub golfer: String,
-    pub group: i32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TournamentGolferGroupUploadRequest {
-    pub groups: Vec<TournamentGolferGroupUploadEntry>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TournamentGolferGroupUploadResponse {
-    pub total_processed: usize,
-    pub errors: Vec<String>,
-}
-
 // Admin Stats
 #[derive(Debug, Serialize)]
 pub struct ScoreDistribution {
@@ -293,15 +197,6 @@ pub struct ScoreDistribution {
 }
 
 #[derive(Debug, Serialize, FromRow)]
-pub struct SeasonBreakdown {
-    pub season_name: String,
-    pub season_year: i32,
-    pub tournament_count: i64,
-    pub team_count: i64,
-    pub score_count: i64,
-}
-
-#[derive(Debug, Serialize, FromRow)]
 pub struct PopularGolfer {
     pub golfer_name: String,
     pub times_selected: i64,
@@ -309,7 +204,6 @@ pub struct PopularGolfer {
 
 #[derive(Debug, Serialize)]
 pub struct AdminStats {
-    pub total_seasons: i64,
     pub total_tournaments: i64,
     pub total_teams: i64,
     pub total_golfers: i64,
@@ -318,7 +212,6 @@ pub struct AdminStats {
     pub access_keys_used: i64,
     pub access_keys_unused: i64,
     pub score_distribution: ScoreDistribution,
-    pub season_breakdown: Vec<SeasonBreakdown>,
     pub popular_golfers: Vec<PopularGolfer>,
 }
 
@@ -593,4 +486,66 @@ pub struct RefreshScoresResponse {
     pub golfers_updated: usize,
     pub golfers_skipped: usize,
     pub errors: Vec<String>,
+}
+
+// Paste golfers from a list of names
+#[derive(Debug, Deserialize)]
+pub struct PasteGolfersRequest {
+    pub names: Vec<String>,
+    pub is_amateur: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PasteGolferResult {
+    pub name: String,
+    pub id: String,
+    pub created: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PasteGolfersResponse {
+    pub results: Vec<PasteGolferResult>,
+    pub errors: Vec<String>,
+}
+
+// ESPN field fetch and group assignment
+#[derive(Debug, Serialize)]
+pub struct EspnFieldGolfer {
+    pub golfer_id: String,
+    pub name: String,
+    pub espn_id: Option<String>,
+    pub created: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EspnFieldGroup {
+    pub group: i32,
+    pub golfers: Vec<EspnFieldGolfer>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EspnFieldPreviewResponse {
+    pub groups: Vec<EspnFieldGroup>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GolferGroupAssignment {
+    pub golfer_id: String,
+    pub group: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SaveGroupsRequest {
+    pub assignments: Vec<GolferGroupAssignment>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SaveGroupsResponse {
+    pub total_processed: usize,
+}
+
+// Public query param for listing teams by tournament
+#[derive(Debug, Deserialize)]
+pub struct TournamentIdQuery {
+    pub tournament_id: Option<String>,
 }

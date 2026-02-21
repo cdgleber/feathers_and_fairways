@@ -3,12 +3,10 @@ const API_BASE = '/api';
 
 class FantasyGolfApp {
     constructor() {
-        this.currentSeason = null;
         this.selectedGolfers = new Map(); // Map<group, golferId>
         this.validatedKey = null;
         this.adminToken = localStorage.getItem('adminToken');
         this.selectedTournament = null;
-        this.allSeasons = [];
         this.init();
     }
 
@@ -19,7 +17,6 @@ class FantasyGolfApp {
     }
 
     initDarkMode() {
-        // Load saved theme preference
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
     }
@@ -67,16 +64,6 @@ class FantasyGolfApp {
             this.validateAccessKey();
         });
 
-        document.getElementById('createTeamForm')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.createTeam();
-        });
-
-        document.getElementById('createSeasonForm')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.createSeason();
-        });
-
         document.getElementById('generateKeysForm')?.addEventListener('submit', (e) => {
             e.preventDefault();
             this.generateAccessKeys();
@@ -90,14 +77,6 @@ class FantasyGolfApp {
         document.getElementById('createTournamentForm')?.addEventListener('submit', (e) => {
             e.preventDefault();
             this.createTournament();
-        });
-
-        // Leaderboard tabs (scoped to avoid admin tab conflict)
-        document.querySelectorAll('#leaderboardView .tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                const tabName = e.currentTarget.dataset.tab;
-                this.switchTab(tabName);
-            });
         });
 
         // Admin tabs
@@ -146,40 +125,20 @@ class FantasyGolfApp {
             }
         });
 
-        // Tournament select
+        // Tournament leaderboard select
         document.getElementById('tournamentSelect')?.addEventListener('change', (e) => {
             if (e.target.value) {
                 this.loadTournamentLeaderboard(e.target.value);
             }
         });
 
-        // History view selects
-        document.getElementById('historySeasonSelect')?.addEventListener('change', (e) => {
-            if (e.target.value) {
-                this.loadHistoryTournaments(e.target.value);
-            }
-        });
+        // History tournament select
         document.getElementById('historyTournamentSelect')?.addEventListener('change', (e) => {
             if (e.target.value) {
                 this.loadHistoryTournamentData(e.target.value);
             } else {
                 this.hideHistoryData();
             }
-        });
-
-        // Score file input
-        document.getElementById('scoreFileInput')?.addEventListener('change', (e) => {
-            this.previewScoreFile(e);
-        });
-
-        // Golfer file input
-        document.getElementById('golferFileInput')?.addEventListener('change', (e) => {
-            this.previewGolferFile(e);
-        });
-
-        // Group file input
-        document.getElementById('groupFileInput')?.addEventListener('change', (e) => {
-            this.previewGroupFile(e);
         });
 
         // Import file input
@@ -191,22 +150,6 @@ class FantasyGolfApp {
         document.getElementById('importTournamentSelect')?.addEventListener('change', () => {
             this.updateImportCommitButton();
         });
-
-        // Group upload tournament select
-        document.getElementById('groupUploadTournament')?.addEventListener('change', () => {
-            const btn = document.getElementById('uploadGroupsBtn');
-            if (btn) {
-                btn.disabled = !document.getElementById('groupUploadTournament').value || !this.pendingGroupData;
-            }
-        });
-
-        // Score upload tournament select
-        document.getElementById('scoreUploadTournament')?.addEventListener('change', () => {
-            const btn = document.getElementById('uploadScoresBtn');
-            if (btn) {
-                btn.disabled = !document.getElementById('scoreUploadTournament').value || !this.pendingScoreData;
-            }
-        });
     }
 
     closeMobileNav() {
@@ -217,17 +160,15 @@ class FantasyGolfApp {
         document.querySelectorAll('.view').forEach(view => {
             view.classList.remove('active');
         });
-        
+
         const view = document.getElementById(`${viewName}View`);
         if (view) {
             view.classList.add('active');
-            
-            // Check admin auth for admin view
+
             if (viewName === 'admin') {
                 this.checkAdminAuth();
             }
-            
-            // Load data for specific views
+
             if (viewName === 'leaderboard') {
                 this.loadLeaderboards();
             } else if (viewName === 'history') {
@@ -235,19 +176,6 @@ class FantasyGolfApp {
             } else if (viewName === 'admin' && this.adminToken) {
                 this.loadAdminData();
             }
-        }
-    }
-
-    switchTab(tabName) {
-        const view = document.getElementById('leaderboardView');
-        view.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        view.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-
-        view.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
-        document.getElementById(`${tabName}Tab`)?.classList.add('active');
-
-        if (tabName === 'tournament') {
-            this.loadTournaments();
         }
     }
 
@@ -270,10 +198,7 @@ class FantasyGolfApp {
     async loadInitialData() {
         this.showLoading();
         try {
-            await Promise.all([
-                this.loadActiveSeason(),
-                this.loadStats(),
-            ]);
+            await this.loadStats();
         } catch (error) {
             this.showToast('Error loading data', 'error');
             console.error(error);
@@ -282,50 +207,11 @@ class FantasyGolfApp {
         }
     }
 
-    async loadActiveSeason() {
-        try {
-            const response = await fetch(`${API_BASE}/seasons/active`);
-            if (response.ok) {
-                this.currentSeason = await response.json();
-                this.displaySeasonInfo();
-            } else {
-                document.getElementById('currentSeasonInfo').innerHTML = 
-                    '<p class="text-center">No active season. Contact the commissioner to create one.</p>';
-            }
-        } catch (error) {
-            console.error('Error loading active season:', error);
-        }
-    }
-
-    displaySeasonInfo() {
-        const container = document.getElementById('currentSeasonInfo');
-        if (!this.currentSeason) return;
-
-        container.innerHTML = `
-            <h4 class="season-info-title">${this.currentSeason.name}</h4>
-            <div class="season-info-grid">
-                <div>
-                    <p class="season-info-label">Year</p>
-                    <p class="season-info-value">${this.currentSeason.year}</p>
-                </div>
-                <div>
-                    <p class="season-info-label">Start Date</p>
-                    <p class="season-info-value">${this.formatDate(this.currentSeason.start_date)}</p>
-                </div>
-                <div>
-                    <p class="season-info-label">End Date</p>
-                    <p class="season-info-value">${this.formatDate(this.currentSeason.end_date)}</p>
-                </div>
-            </div>
-        `;
-    }
-
     async loadStats() {
         try {
-            const [golfersRes, teamsRes, tournamentsRes] = await Promise.all([
+            const [golfersRes, tournamentsRes] = await Promise.all([
                 fetch(`${API_BASE}/golfers`),
-                this.currentSeason ? fetch(`${API_BASE}/teams/${this.currentSeason.id}`) : null,
-                this.currentSeason ? fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`) : null,
+                fetch(`${API_BASE}/tournaments`),
             ]);
 
             if (golfersRes.ok) {
@@ -333,15 +219,20 @@ class FantasyGolfApp {
                 document.getElementById('totalGolfers').textContent = golfers.length;
             }
 
-            if (teamsRes?.ok) {
-                const teams = await teamsRes.json();
-                document.getElementById('totalTeams').textContent = teams.length;
-            }
-
-            if (tournamentsRes?.ok) {
+            if (tournamentsRes.ok) {
                 const tournaments = await tournamentsRes.json();
                 const active = tournaments.filter(t => t.is_active).length;
                 document.getElementById('activeTournaments').textContent = active;
+
+                // Count teams across all tournaments — use first active tournament if any
+                const activeTournament = tournaments.find(t => t.is_active);
+                if (activeTournament) {
+                    const teamsRes = await fetch(`${API_BASE}/teams?tournament_id=${activeTournament.id}`);
+                    if (teamsRes.ok) {
+                        const teams = await teamsRes.json();
+                        document.getElementById('totalTeams').textContent = teams.length;
+                    }
+                }
             }
         } catch (error) {
             console.error('Error loading stats:', error);
@@ -369,14 +260,16 @@ class FantasyGolfApp {
 
             if (result.valid && !result.already_used) {
                 this.validatedKey = key;
+                this.validatedTournamentId = result.tournament_id;
                 this.showToast('Access key validated successfully!', 'success');
                 document.getElementById('teamBuilderSection').classList.remove('hidden');
-                await this.loadTournamentsForSelection();
+                await this.loadTournamentsForSelection(result.tournament_id);
             } else if (result.already_used) {
                 this.validatedKey = key;
+                this.validatedTournamentId = result.tournament_id;
                 this.showToast('Access key already used - you can edit existing teams', 'info');
                 document.getElementById('teamBuilderSection').classList.remove('hidden');
-                await this.loadTournamentsForSelection();
+                await this.loadTournamentsForSelection(result.tournament_id);
             } else {
                 this.showToast('Invalid access key', 'error');
             }
@@ -412,7 +305,7 @@ class FantasyGolfApp {
                 const groupGolfers = groups[i] || [];
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'golfer-group';
-                
+
                 groupDiv.innerHTML = `
                     <div class="golfer-group-header">
                         <span class="material-icons">sports_golf</span>
@@ -421,10 +314,10 @@ class FantasyGolfApp {
                     <div class="golfer-list">
                         ${groupGolfers.map(golfer => `
                             <div class="golfer-item">
-                                <input 
-                                    type="radio" 
-                                    name="group${i}" 
-                                    value="${golfer.id}" 
+                                <input
+                                    type="radio"
+                                    name="group${i}"
+                                    value="${golfer.id}"
                                     id="golfer-${golfer.id}"
                                     onchange="app.selectGolfer(${i}, '${golfer.id}', '${golfer.name}')">
                                 <label for="golfer-${golfer.id}">${golfer.name}${golfer.is_amateur ? ' <span class="amateur-badge">(A)</span>' : ''}</label>
@@ -432,7 +325,7 @@ class FantasyGolfApp {
                         `).join('')}
                     </div>
                 `;
-                
+
                 container.appendChild(groupDiv);
             }
 
@@ -451,7 +344,7 @@ class FantasyGolfApp {
     updateSelectionStatus() {
         const container = document.getElementById('selectionStatus');
         const createBtn = document.getElementById('createTeamBtn');
-        
+
         container.innerHTML = '';
         for (let i = 1; i <= 9; i++) {
             const selected = this.selectedGolfers.get(i);
@@ -491,13 +384,13 @@ class FantasyGolfApp {
         this.showLoading();
         try {
             // Check if updating existing team or creating new
-            const teamsResponse = await fetch(`${API_BASE}/teams/${this.currentSeason.id}`);
+            const teamsResponse = await fetch(`${API_BASE}/teams?tournament_id=${this.selectedTournament}`);
             let isUpdate = false;
-            
+
             if (teamsResponse.ok) {
                 const teams = await teamsResponse.json();
-                const existingTeam = teams.find(t => 
-                    t.tournament_id === this.selectedTournament && 
+                const existingTeam = teams.find(t =>
+                    t.tournament_id === this.selectedTournament &&
                     t.player_name === playerName
                 );
                 isUpdate = !!existingTeam;
@@ -523,17 +416,8 @@ class FantasyGolfApp {
             });
 
             if (response.ok) {
-                const result = await response.json();
                 this.showToast(isUpdate ? 'Team updated successfully!' : 'Team created successfully!', 'success');
-                
-                // Hide form and show success message
                 document.getElementById('teamBuilderSection').classList.add('hidden');
-                const successSection = document.getElementById('teamCreatedSection');
-                successSection.classList.remove('hidden');
-                document.getElementById('teamCreatedMessage').textContent = 
-                    isUpdate 
-                        ? `Your team has been updated for the selected tournament!`
-                        : `Welcome, ${playerName}! Your team has been created with your selected golfers.`;
             } else {
                 const error = await response.json();
                 this.showToast(error.message || 'Error saving team', 'error');
@@ -547,71 +431,27 @@ class FantasyGolfApp {
     }
 
     async loadLeaderboards() {
-        if (!this.currentSeason) return;
-
-        this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/leaderboard/${this.currentSeason.id}/detailed`);
-            if (response.ok) {
-                const leaderboard = await response.json();
-                this.displaySeasonLeaderboard(leaderboard);
-            }
-        } catch (error) {
-            this.showToast('Error loading leaderboard', 'error');
-            console.error(error);
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    displaySeasonLeaderboard(leaderboard) {
-        const container = document.getElementById('seasonLeaderboard');
-
-        if (leaderboard.length === 0) {
-            container.innerHTML = '<p class="loading">No teams yet. Be the first to join!</p>';
-            return;
-        }
-
-        container.innerHTML = `
-            <table>
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Player</th>
-                        <th>Golfers</th>
-                        <th>Points</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${leaderboard.map((entry, index) => `
-                        <tr>
-                            <td><span class="rank rank-${index + 1}">#${index + 1}</span></td>
-                            <td>${entry.player_name}</td>
-                            <td><span class="golfer-names">${entry.golfers.map(g => g.name).join(', ')}</span></td>
-                            <td><span class="points">${entry.total_points}</span></td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-    }
-
-    async loadTournaments() {
-        if (!this.currentSeason) return;
-
-        try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            const response = await fetch(`${API_BASE}/tournaments`);
             if (response.ok) {
                 const tournaments = await response.json();
                 const select = document.getElementById('tournamentSelect');
-                
+
                 select.innerHTML = '<option value="">Select a tournament</option>' +
                     tournaments.map(t => `
                         <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
                     `).join('');
+
+                // Auto-select active tournament
+                const active = tournaments.find(t => t.is_active);
+                if (active) {
+                    select.value = active.id;
+                    this.loadTournamentLeaderboard(active.id);
+                }
             }
         } catch (error) {
-            console.error('Error loading tournaments:', error);
+            this.showToast('Error loading leaderboard', 'error');
+            console.error(error);
         }
     }
 
@@ -633,7 +473,7 @@ class FantasyGolfApp {
 
     displayTournamentLeaderboard(leaderboard) {
         const container = document.getElementById('tournamentLeaderboard');
-        
+
         if (leaderboard.length === 0) {
             container.innerHTML = '<p class="loading">No scores recorded yet.</p>';
             return;
@@ -663,55 +503,41 @@ class FantasyGolfApp {
 
     async loadAdminData() {
         await this.loadAdminStats();
-        await this.loadTournaments();
-        await this.loadTournamentsForScoreUpload();
-        await this.loadTournamentsForGroupUpload();
+        await this.loadAllTournamentsForAdmin();
     }
 
-    async createSeason() {
-        const name = document.getElementById('seasonName').value.trim();
-        const year = parseInt(document.getElementById('seasonYear').value);
-        const startDate = document.getElementById('seasonStart').value;
-        const endDate = document.getElementById('seasonEnd').value;
-
-        if (!name || !year || !startDate || !endDate) {
-            this.showToast('Please fill in all fields', 'error');
-            return;
-        }
-
-        this.showLoading();
+    // Fetch all tournaments and populate every admin dropdown that needs them
+    async loadAllTournamentsForAdmin() {
         try {
-            const response = await this.makeAdminRequest(`${API_BASE}/admin/seasons`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, year, start_date: startDate, end_date: endDate })
-            });
+            const response = await fetch(`${API_BASE}/tournaments`);
+            if (!response.ok) return;
+            const tournaments = await response.json();
 
-            if (response.ok) {
-                const season = await response.json();
-                this.showToast('Season created successfully!', 'success');
-                this.currentSeason = season;
-                document.getElementById('createSeasonForm').reset();
-                await this.loadInitialData();
-            } else {
-                const error = await response.json();
-                this.showToast(error.message || 'Error creating season', 'error');
-            }
+            const selects = [
+                { id: 'keyTournamentSelect', placeholder: 'Select a tournament' },
+                { id: 'fieldTournamentSelect', placeholder: 'Select a tournament' },
+            ];
+
+            selects.forEach(({ id, placeholder }) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.innerHTML = `<option value="">${placeholder}</option>` +
+                        tournaments.map(t => `<option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>`).join('');
+                }
+            });
         } catch (error) {
-            this.showToast('Error creating season', 'error');
-            console.error(error);
-        } finally {
-            this.hideLoading();
+            console.error('Error loading admin tournaments:', error);
         }
     }
 
     async generateAccessKeys() {
-        if (!this.currentSeason) {
-            this.showToast('Please create a season first', 'error');
+        const tournamentId = document.getElementById('keyTournamentSelect').value;
+        const count = parseInt(document.getElementById('keyCount').value);
+
+        if (!tournamentId) {
+            this.showToast('Please select a tournament', 'error');
             return;
         }
-
-        const count = parseInt(document.getElementById('keyCount').value);
 
         if (count < 1 || count > 50) {
             this.showToast('Please enter a number between 1 and 50', 'error');
@@ -723,7 +549,7 @@ class FantasyGolfApp {
             const response = await this.makeAdminRequest(`${API_BASE}/admin/access-keys`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ season_id: this.currentSeason.id, count })
+                body: JSON.stringify({ tournament_id: tournamentId, count })
             });
 
             if (response.ok) {
@@ -789,12 +615,56 @@ class FantasyGolfApp {
         }
     }
 
-    async createTournament() {
-        if (!this.currentSeason) {
-            this.showToast('Please create a season first', 'error');
+    async pasteGolfers() {
+        const textarea = document.getElementById('pasteGolferNames');
+        const names = textarea.value.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+
+        if (names.length === 0) {
+            this.showToast('Please enter at least one golfer name', 'error');
             return;
         }
 
+        const isAmateur = document.getElementById('pasteGolferAmateur').checked;
+
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/golfers/paste`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ names, is_amateur: isAmateur })
+            });
+
+            const result = await response.json();
+            const resultDiv = document.getElementById('pasteGolferResult');
+
+            if (response.ok) {
+                const created = result.results.filter(r => r.created).length;
+                const found = result.results.filter(r => !r.created).length;
+
+                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
+                html += `<p><strong>${created}</strong> golfers created, <strong>${found}</strong> already existed.</p>`;
+                if (result.errors.length > 0) {
+                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
+                    html += `<ul style="margin-left: 16px;">${result.errors.map(e => `<li>${e}</li>`).join('')}</ul>`;
+                }
+                html += `</div>`;
+                resultDiv.innerHTML = html;
+                resultDiv.classList.remove('hidden');
+                this.showToast(`${created} golfers created!`, 'success');
+                textarea.value = '';
+                await this.loadStats();
+            } else {
+                this.showToast(result.message || 'Error importing golfers', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error importing golfers', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async createTournament() {
         const name = document.getElementById('tournamentName').value.trim();
         const startDate = document.getElementById('tournamentStart').value;
         const endDate = document.getElementById('tournamentEnd').value;
@@ -809,18 +679,14 @@ class FantasyGolfApp {
             const response = await this.makeAdminRequest(`${API_BASE}/admin/tournaments`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    season_id: this.currentSeason.id, 
-                    name, 
-                    start_date: startDate, 
-                    end_date: endDate 
-                })
+                body: JSON.stringify({ name, start_date: startDate, end_date: endDate })
             });
 
             if (response.ok) {
                 this.showToast('Tournament created successfully!', 'success');
                 document.getElementById('createTournamentForm').reset();
                 await this.loadStats();
+                await this.loadAllTournamentsForAdmin();
             } else {
                 const error = await response.json();
                 this.showToast(error.message || 'Error creating tournament', 'error');
@@ -833,360 +699,119 @@ class FantasyGolfApp {
         }
     }
 
-    // Score upload functions
-    async loadTournamentsForScoreUpload() {
-        if (!this.currentSeason) return;
-
-        try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
-            if (response.ok) {
-                const tournaments = await response.json();
-                const select = document.getElementById('scoreUploadTournament');
-                if (select) {
-                    select.innerHTML = '<option value="">Select a tournament</option>' +
-                        tournaments.map(t => `
-                            <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
-                        `).join('');
-                }
-            }
-        } catch (error) {
-            console.error('Error loading tournaments for score upload:', error);
-        }
-    }
-
-    async loadTournamentsForGroupUpload() {
-        if (!this.currentSeason) return;
-
-        try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
-            if (response.ok) {
-                const tournaments = await response.json();
-                const select = document.getElementById('groupUploadTournament');
-                if (select) {
-                    select.innerHTML = '<option value="">Select a tournament</option>' +
-                        tournaments.map(t => `
-                            <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
-                        `).join('');
-                }
-            }
-        } catch (error) {
-            console.error('Error loading tournaments for group upload:', error);
-        }
-    }
-
-    previewScoreFile(event) {
-        const file = event.target.files[0];
-        const previewSection = document.getElementById('scorePreview');
-        const previewContent = document.getElementById('scorePreviewContent');
-        const uploadBtn = document.getElementById('uploadScoresBtn');
-
-        if (!file) {
-            previewSection.classList.add('hidden');
-            uploadBtn.disabled = true;
-            this.pendingScoreData = null;
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-
-                // Validate basic structure
-                if (!data.pars || !Array.isArray(data.pars) || data.pars.length !== 18) {
-                    this.showToast('Invalid file: pars must be an array of 18 values', 'error');
-                    return;
-                }
-
-                if (!data.scores || !Array.isArray(data.scores) || data.scores.length === 0) {
-                    this.showToast('Invalid file: scores array is missing or empty', 'error');
-                    return;
-                }
-
-                this.pendingScoreData = data;
-
-                // Show preview
-                const golferCount = data.scores.length;
-                const days = [...new Set(data.scores.map(s => s.day))].sort();
-                const golferNames = data.scores.map(s => s.golfer);
-
-                previewContent.innerHTML = `
-                    <div class="info-card" style="margin-bottom: var(--spacing-md);">
-                        <p><strong>${golferCount}</strong> golfer score entries</p>
-                        <p>Days: <strong>${days.join(', ')}</strong></p>
-                        <p>Golfers: <strong>${golferNames.join(', ')}</strong></p>
-                        <p>Total hole scores: <strong>${golferCount * 18}</strong></p>
-                    </div>
-                `;
-
-                previewSection.classList.remove('hidden');
-                uploadBtn.disabled = !document.getElementById('scoreUploadTournament').value;
-            } catch (error) {
-                this.showToast('Invalid JSON file', 'error');
-                previewSection.classList.add('hidden');
-                uploadBtn.disabled = true;
-            }
-        };
-        reader.readAsText(file);
-    }
-
-    async uploadScores() {
-        const tournamentId = document.getElementById('scoreUploadTournament').value;
+    // ESPN Field Fetch
+    async fetchEspnField() {
+        const tournamentId = document.getElementById('fieldTournamentSelect').value;
+        const espnId = document.getElementById('fieldEspnId').value.trim();
 
         if (!tournamentId) {
             this.showToast('Please select a tournament', 'error');
             return;
         }
-
-        if (!this.pendingScoreData) {
-            this.showToast('Please select a score file first', 'error');
+        if (!espnId) {
+            this.showToast('Please enter an ESPN tournament ID', 'error');
             return;
         }
 
         this.showLoading();
         try {
             const response = await this.makeAdminRequest(
-                `${API_BASE}/admin/tournaments/${tournamentId}/scores/upload`,
+                `${API_BASE}/admin/tournaments/${tournamentId}/espn-field`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.pendingScoreData)
+                    body: JSON.stringify({ espn_tournament_id: espnId })
                 }
             );
 
-            const result = await response.json();
-            const resultSection = document.getElementById('scoreUploadResult');
-
             if (response.ok) {
-                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
-                html += `<p><strong>${result.total_scores_processed}</strong> hole scores processed successfully.</p>`;
-                if (result.errors.length > 0) {
-                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
-                    html += `<ul style="margin-left: 16px;">`;
-                    result.errors.forEach(err => {
-                        html += `<li>${err}</li>`;
-                    });
-                    html += `</ul>`;
-                }
-                html += `</div>`;
-                resultSection.innerHTML = html;
-                resultSection.classList.remove('hidden');
-                this.showToast('Scores uploaded successfully!', 'success');
+                const data = await response.json();
+                this.espnFieldTournamentId = tournamentId;
+                this.espnFieldGroups = data.groups;
+                this.displayEspnFieldPreview(data.groups);
+                this.showToast(`Field fetched: ${data.groups.reduce((s, g) => s + g.golfers.length, 0)} golfers in 9 groups`, 'success');
             } else {
-                this.showToast(result.message || 'Error uploading scores', 'error');
+                const error = await response.json();
+                this.showToast(error.message || 'Error fetching ESPN field', 'error');
             }
         } catch (error) {
-            this.showToast('Error uploading scores', 'error');
+            this.showToast('Error fetching ESPN field', 'error');
             console.error(error);
         } finally {
             this.hideLoading();
         }
     }
 
-    // Golfer upload functions
-    previewGolferFile(event) {
-        const file = event.target.files[0];
-        const previewSection = document.getElementById('golferPreview');
-        const previewContent = document.getElementById('golferPreviewContent');
-        const uploadBtn = document.getElementById('uploadGolfersBtn');
+    displayEspnFieldPreview(groups) {
+        const preview = document.getElementById('espnFieldPreview');
+        const container = document.getElementById('espnFieldGroups');
 
-        if (!file) {
-            previewSection.classList.add('hidden');
-            uploadBtn.disabled = true;
-            this.pendingGolferData = null;
+        let html = '<div class="leaderboard"><table><thead><tr><th>Group</th><th>Golfer</th><th>ESPN ID</th><th>Status</th><th>Move to Group</th></tr></thead><tbody>';
+
+        groups.forEach(group => {
+            group.golfers.forEach(golfer => {
+                html += `<tr>
+                    <td><strong>G${group.group}</strong></td>
+                    <td>${golfer.name}</td>
+                    <td style="font-size: 0.85em; color: var(--text-secondary);">${golfer.espn_id || '—'}</td>
+                    <td>${golfer.created ? '<span style="color: var(--success);">New</span>' : 'Existing'}</td>
+                    <td>
+                        <select class="form-input field-group-select" style="width: 80px; padding: 4px 8px;"
+                            data-golfer-id="${golfer.golfer_id}" data-original-group="${group.group}">
+                            ${[1,2,3,4,5,6,7,8,9].map(g => `<option value="${g}"${g === group.group ? ' selected' : ''}>${g}</option>`).join('')}
+                        </select>
+                    </td>
+                </tr>`;
+            });
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+        preview.classList.remove('hidden');
+        document.getElementById('saveGroupsResult').classList.add('hidden');
+    }
+
+    async saveGroupAssignments() {
+        const selects = document.querySelectorAll('.field-group-select');
+        const assignments = Array.from(selects).map(sel => ({
+            golfer_id: sel.dataset.golferId,
+            group: parseInt(sel.value)
+        }));
+
+        if (assignments.length === 0) {
+            this.showToast('No assignments to save', 'error');
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-
-                if (!data.golfers || !Array.isArray(data.golfers) || data.golfers.length === 0) {
-                    this.showToast('Invalid file: golfers array is missing or empty', 'error');
-                    return;
-                }
-
-                this.pendingGolferData = data;
-
-                const groupCounts = {};
-                data.golfers.forEach(g => {
-                    groupCounts[g.group] = (groupCounts[g.group] || 0) + 1;
-                });
-
-                const groupSummary = Object.entries(groupCounts)
-                    .sort(([a], [b]) => a - b)
-                    .map(([group, count]) => `Group ${group}: ${count}`)
-                    .join(', ');
-
-                previewContent.innerHTML = `
-                    <div class="info-card" style="margin-bottom: var(--spacing-md);">
-                        <p><strong>${data.golfers.length}</strong> golfers</p>
-                        <p>${groupSummary}</p>
-                        <p style="margin-top: 8px;"><strong>Names:</strong> ${data.golfers.map(g => g.name).join(', ')}</p>
-                    </div>
-                `;
-
-                previewSection.classList.remove('hidden');
-                uploadBtn.disabled = false;
-            } catch (error) {
-                this.showToast('Invalid JSON file', 'error');
-                previewSection.classList.add('hidden');
-                uploadBtn.disabled = true;
-            }
-        };
-        reader.readAsText(file);
-    }
-
-    async uploadGolfers() {
-        if (!this.pendingGolferData) {
-            this.showToast('Please select a golfer file first', 'error');
-            return;
-        }
-
-        this.showLoading();
-        try {
-            const response = await this.makeAdminRequest(
-                `${API_BASE}/admin/golfers/upload`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.pendingGolferData)
-                }
-            );
-
-            const result = await response.json();
-            const resultSection = document.getElementById('golferUploadResult');
-
-            if (response.ok) {
-                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
-                html += `<p><strong>${result.total_created}</strong> golfers created, <strong>${result.total_updated}</strong> updated.</p>`;
-                if (result.errors.length > 0) {
-                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
-                    html += `<ul style="margin-left: 16px;">`;
-                    result.errors.forEach(err => {
-                        html += `<li>${err}</li>`;
-                    });
-                    html += `</ul>`;
-                }
-                html += `</div>`;
-                resultSection.innerHTML = html;
-                resultSection.classList.remove('hidden');
-                this.showToast('Golfers uploaded successfully!', 'success');
-                await this.loadStats();
-            } else {
-                this.showToast(result.message || 'Error uploading golfers', 'error');
-            }
-        } catch (error) {
-            this.showToast('Error uploading golfers', 'error');
-            console.error(error);
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    // Tournament golfer group upload functions
-    previewGroupFile(event) {
-        const file = event.target.files[0];
-        const previewSection = document.getElementById('groupPreview');
-        const previewContent = document.getElementById('groupPreviewContent');
-        const uploadBtn = document.getElementById('uploadGroupsBtn');
-
-        if (!file) {
-            previewSection.classList.add('hidden');
-            uploadBtn.disabled = true;
-            this.pendingGroupData = null;
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-
-                if (!data.groups || !Array.isArray(data.groups) || data.groups.length === 0) {
-                    this.showToast('Invalid file: groups array is missing or empty', 'error');
-                    return;
-                }
-
-                this.pendingGroupData = data;
-
-                const groupCounts = {};
-                data.groups.forEach(g => {
-                    groupCounts[g.group] = (groupCounts[g.group] || 0) + 1;
-                });
-
-                const groupSummary = Object.entries(groupCounts)
-                    .sort(([a], [b]) => a - b)
-                    .map(([group, count]) => `Group ${group}: ${count}`)
-                    .join(', ');
-
-                previewContent.innerHTML = `
-                    <div class="info-card" style="margin-bottom: var(--spacing-md);">
-                        <p><strong>${data.groups.length}</strong> golfer group assignments</p>
-                        <p>${groupSummary}</p>
-                        <p style="margin-top: 8px;"><strong>Golfers:</strong> ${data.groups.map(g => `${g.golfer} (G${g.group})`).join(', ')}</p>
-                    </div>
-                `;
-
-                previewSection.classList.remove('hidden');
-                uploadBtn.disabled = !document.getElementById('groupUploadTournament').value;
-            } catch (error) {
-                this.showToast('Invalid JSON file', 'error');
-                previewSection.classList.add('hidden');
-                uploadBtn.disabled = true;
-            }
-        };
-        reader.readAsText(file);
-    }
-
-    async uploadTournamentGroups() {
-        const tournamentId = document.getElementById('groupUploadTournament').value;
-
+        const tournamentId = this.espnFieldTournamentId;
         if (!tournamentId) {
-            this.showToast('Please select a tournament', 'error');
-            return;
-        }
-
-        if (!this.pendingGroupData) {
-            this.showToast('Please select a groups file first', 'error');
+            this.showToast('No tournament selected', 'error');
             return;
         }
 
         this.showLoading();
         try {
             const response = await this.makeAdminRequest(
-                `${API_BASE}/admin/tournaments/${tournamentId}/groups/upload`,
+                `${API_BASE}/admin/tournaments/${tournamentId}/groups`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.pendingGroupData)
+                    body: JSON.stringify({ assignments })
                 }
             );
 
             const result = await response.json();
-            const resultSection = document.getElementById('groupUploadResult');
+            const resultDiv = document.getElementById('saveGroupsResult');
 
             if (response.ok) {
-                let html = `<div class="info-card" style="border-left: 4px solid var(--success);">`;
-                html += `<p><strong>${result.total_processed}</strong> golfer group assignments processed.</p>`;
-                if (result.errors.length > 0) {
-                    html += `<p style="color: var(--error); margin-top: 8px;"><strong>Errors:</strong></p>`;
-                    html += `<ul style="margin-left: 16px;">`;
-                    result.errors.forEach(err => {
-                        html += `<li>${err}</li>`;
-                    });
-                    html += `</ul>`;
-                }
-                html += `</div>`;
-                resultSection.innerHTML = html;
-                resultSection.classList.remove('hidden');
-                this.showToast('Tournament groups uploaded successfully!', 'success');
+                resultDiv.innerHTML = `<div class="info-card" style="border-left: 4px solid var(--success);"><p><strong>${result.total_processed}</strong> group assignments saved.</p></div>`;
+                resultDiv.classList.remove('hidden');
+                this.showToast('Group assignments saved!', 'success');
             } else {
-                this.showToast(result.message || 'Error uploading groups', 'error');
+                this.showToast(result.message || 'Error saving groups', 'error');
             }
         } catch (error) {
-            this.showToast('Error uploading tournament groups', 'error');
+            this.showToast('Error saving group assignments', 'error');
             console.error(error);
         } finally {
             this.hideLoading();
@@ -1196,10 +821,10 @@ class FantasyGolfApp {
     // Utility functions
     formatDate(dateString) {
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
         });
     }
 
@@ -1223,27 +848,28 @@ class FantasyGolfApp {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        
-        const icon = type === 'success' ? 'check_circle' : 
-                     type === 'error' ? 'error' : 
+
+        const icon = type === 'success' ? 'check_circle' :
+                     type === 'error' ? 'error' :
                      'info';
-        
+
         toast.innerHTML = `
             <span class="material-icons">${icon}</span>
             <span>${message}</span>
         `;
-        
+
         container.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
     }
+
     // Admin authentication
     async adminLogin() {
         const password = document.getElementById('adminPassword').value;
-        
+
         this.showLoading();
         try {
             const response = await fetch(`${API_BASE}/admin/login`, {
@@ -1275,7 +901,7 @@ class FantasyGolfApp {
     checkAdminAuth() {
         const modal = document.getElementById('adminLoginModal');
         const content = document.getElementById('adminContent');
-        
+
         if (this.adminToken) {
             modal.classList.add('hidden');
             content.classList.remove('hidden');
@@ -1317,29 +943,33 @@ class FantasyGolfApp {
         return response;
     }
 
-    async loadTournamentsForSelection() {
-        if (!this.currentSeason) return;
-
+    async loadTournamentsForSelection(preSelectedTournamentId) {
         try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            const response = await fetch(`${API_BASE}/tournaments`);
             if (response.ok) {
                 const tournaments = await response.json();
-                this.displayTournamentSelection(tournaments);
+                this.displayTournamentSelection(tournaments, preSelectedTournamentId);
             }
         } catch (error) {
             console.error('Error loading tournaments:', error);
         }
     }
 
-    displayTournamentSelection(tournaments) {
-        const upcomingTournaments = tournaments.filter(t => {
-            const startDate = new Date(t.start_date);
-            const now = new Date();
-            return startDate >= now;
-        });
+    displayTournamentSelection(tournaments, preSelectedId) {
+        // If we have a pre-selected tournament from the access key, filter to just that one
+        // Otherwise show all upcoming tournaments
+        let available;
+        if (preSelectedId) {
+            available = tournaments.filter(t => t.id === preSelectedId);
+        } else {
+            available = tournaments.filter(t => {
+                const startDate = new Date(t.start_date);
+                return startDate >= new Date();
+            });
+        }
 
-        if (upcomingTournaments.length === 0) {
-            this.showToast('No upcoming tournaments available', 'error');
+        if (available.length === 0) {
+            this.showToast('No tournaments available for this key', 'error');
             return;
         }
 
@@ -1347,10 +977,10 @@ class FantasyGolfApp {
         container.innerHTML = `
             <h3 class="card-title">Select Tournament</h3>
             <div class="form-group">
-                <label for="tournamentSelect" class="form-label">Choose a tournament to create/edit your team</label>
+                <label for="tournamentSelectForTeam" class="form-label">Choose a tournament to create/edit your team</label>
                 <select id="tournamentSelectForTeam" class="form-input">
                     <option value="">-- Select Tournament --</option>
-                    ${upcomingTournaments.map(t => `
+                    ${available.map(t => `
                         <option value="${t.id}">${t.name} - ${this.formatDate(t.start_date)}</option>
                     `).join('')}
                 </select>
@@ -1358,22 +988,29 @@ class FantasyGolfApp {
             <div id="teamFormContainer"></div>
         `;
 
-        document.getElementById('tournamentSelectForTeam').addEventListener('change', (e) => {
-            if (e.target.value) {
-                this.selectedTournament = e.target.value;
-                this.checkExistingTeam();
-            }
-        });
+        // Auto-select if only one option
+        if (available.length === 1) {
+            document.getElementById('tournamentSelectForTeam').value = available[0].id;
+            this.selectedTournament = available[0].id;
+            this.checkExistingTeam();
+        } else {
+            document.getElementById('tournamentSelectForTeam').addEventListener('change', (e) => {
+                if (e.target.value) {
+                    this.selectedTournament = e.target.value;
+                    this.checkExistingTeam();
+                }
+            });
+        }
     }
 
     async checkExistingTeam() {
         if (!this.validatedKey || !this.selectedTournament) return;
 
         try {
-            const response = await fetch(`${API_BASE}/teams/${this.currentSeason.id}`);
+            const response = await fetch(`${API_BASE}/teams?tournament_id=${this.selectedTournament}`);
             if (response.ok) {
                 const teams = await response.json();
-                const existingTeam = teams.find(t => 
+                const existingTeam = teams.find(t =>
                     t.tournament_id === this.selectedTournament
                 );
 
@@ -1394,7 +1031,7 @@ class FantasyGolfApp {
             const response = await fetch(`${API_BASE}/teams/${teamId}/golfers`);
             if (response.ok) {
                 const golfers = await response.json();
-                
+
                 this.selectedGolfers.clear();
                 golfers.forEach(g => {
                     this.selectedGolfers.set(g.win_probability_group, {
@@ -1414,7 +1051,7 @@ class FantasyGolfApp {
 
     async showTeamForm(isEdit = false) {
         const container = document.getElementById('teamFormContainer');
-        
+
         container.innerHTML = `
             <form id="createTeamForm" class="form" style="margin-top: 20px;">
                 <div class="form-group">
@@ -1457,11 +1094,11 @@ class FantasyGolfApp {
 
         await this.loadGolfersForSelection();
     }
+
     // Score Editor methods
     async loadScoreEditorTournaments() {
-        if (!this.currentSeason) return;
         try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            const response = await fetch(`${API_BASE}/tournaments`);
             if (response.ok) {
                 const tournaments = await response.json();
                 const select = document.getElementById('scoreEditorTournament');
@@ -1485,7 +1122,6 @@ class FantasyGolfApp {
                 this.scoreEditorGolfers = await golfersRes.json();
                 this.scoreEditorTournamentId = tournamentId;
 
-                // Find golfers that have scores
                 const golferIdsWithScores = new Set(this.scoreEditorScores.map(s => s.golfer_id));
                 const golfersWithScores = this.scoreEditorGolfers.filter(g => golferIdsWithScores.has(g.id));
 
@@ -1510,17 +1146,12 @@ class FantasyGolfApp {
             return;
         }
 
-        // Find all days
         const days = [...new Set(scores.map(s => s.day))].sort((a, b) => a - b);
 
         let html = '<div class="score-editor-table"><table><thead><tr><th>Hole</th>';
-        days.forEach(d => {
-            html += `<th colspan="2">Round ${d}</th>`;
-        });
+        days.forEach(d => { html += `<th colspan="2">Round ${d}</th>`; });
         html += '</tr><tr><th></th>';
-        days.forEach(() => {
-            html += '<th>Strokes</th><th>To Par</th>';
-        });
+        days.forEach(() => { html += '<th>Strokes</th><th>To Par</th>'; });
         html += '</tr></thead><tbody>';
 
         for (let hole = 1; hole <= 18; hole++) {
@@ -1569,7 +1200,6 @@ class FantasyGolfApp {
             const hole = parseInt(input.dataset.hole);
             const strokes = parseInt(input.value);
 
-            // Find corresponding score_to_par input
             const parInput = document.querySelector(
                 `.score-input[data-golfer-id="${golferId}"][data-day="${day}"][data-hole="${hole}"][data-field="score_to_par"]`
             );
@@ -1578,14 +1208,12 @@ class FantasyGolfApp {
             scores.push({ golfer_id: golferId, day, hole, strokes, score_to_par: scoreToPar });
         });
 
-        // Also check for changed score_to_par inputs without changed strokes
         const changedParInputs = document.querySelectorAll('#scoreEditorTable .score-input.changed[data-field="score_to_par"]');
         changedParInputs.forEach(input => {
             const golferId = input.dataset.golferId;
             const day = parseInt(input.dataset.day);
             const hole = parseInt(input.dataset.hole);
 
-            // Skip if already added via strokes change
             if (scores.find(s => s.golfer_id === golferId && s.day === day && s.hole === hole)) return;
 
             const strokesInput = document.querySelector(
@@ -1613,7 +1241,6 @@ class FantasyGolfApp {
 
             if (response.ok) {
                 this.showToast('Scores saved successfully!', 'success');
-                // Refresh data
                 await this.loadScoreEditorGolfers(this.scoreEditorTournamentId);
                 const golferSelect = document.getElementById('scoreEditorGolfer');
                 if (golferSelect.value) {
@@ -1633,9 +1260,8 @@ class FantasyGolfApp {
 
     // Team Editor methods
     async loadTeamEditorTournaments() {
-        if (!this.currentSeason) return;
         try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            const response = await fetch(`${API_BASE}/tournaments`);
             if (response.ok) {
                 const tournaments = await response.json();
                 const select = document.getElementById('teamEditorTournament');
@@ -1684,7 +1310,6 @@ class FantasyGolfApp {
             const allGolfers = await golferRes.json();
             const teamGolfers = await teamGolferRes.json();
 
-            // Group all golfers by group
             const golfersByGroup = {};
             allGolfers.forEach(g => {
                 if (!golfersByGroup[g.win_probability_group]) {
@@ -1693,7 +1318,6 @@ class FantasyGolfApp {
                 golfersByGroup[g.win_probability_group].push(g);
             });
 
-            // Map current team golfers by group
             const currentByGroup = {};
             teamGolfers.forEach(g => {
                 currentByGroup[g.win_probability_group] = g;
@@ -1752,7 +1376,6 @@ class FantasyGolfApp {
 
             if (response.ok) {
                 this.showToast('Team updated successfully!', 'success');
-                // Refresh the editor
                 await this.displayTeamEditor(this.teamEditorTeamId);
             } else {
                 const error = await response.json();
@@ -1786,7 +1409,6 @@ class FantasyGolfApp {
         const total = dist.eagles_or_better + dist.birdies + dist.pars + dist.bogeys_or_worse;
 
         let html = '<div class="admin-stats-grid">';
-        html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_seasons + '</span><span class="admin-stat-label">Seasons</span></div>';
         html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_tournaments + '</span><span class="admin-stat-label">Tournaments</span></div>';
         html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_teams + '</span><span class="admin-stat-label">Teams</span></div>';
         html += '<div class="admin-stat-item"><span class="admin-stat-value">' + stats.total_golfers + '</span><span class="admin-stat-label">Active Golfers</span></div>';
@@ -1804,15 +1426,6 @@ class FantasyGolfApp {
             html += '</div>';
         }
 
-        if (stats.season_breakdown.length > 0) {
-            html += '<h4 style="margin: var(--spacing-lg) 0 var(--spacing-md);">Season Breakdown</h4>';
-            html += '<div class="leaderboard"><table><thead><tr><th>Season</th><th>Year</th><th>Tournaments</th><th>Teams</th><th>Scores</th></tr></thead><tbody>';
-            stats.season_breakdown.forEach(function(s) {
-                html += '<tr><td>' + s.season_name + '</td><td>' + s.season_year + '</td><td>' + s.tournament_count + '</td><td>' + s.team_count + '</td><td>' + s.score_count + '</td></tr>';
-            });
-            html += '</tbody></table></div>';
-        }
-
         if (stats.popular_golfers.length > 0) {
             html += '<h4 style="margin: var(--spacing-lg) 0 var(--spacing-md);">Most Selected Golfers</h4>';
             html += '<div class="leaderboard"><table><thead><tr><th>Rank</th><th>Golfer</th><th>Times Selected</th></tr></thead><tbody>';
@@ -1827,63 +1440,30 @@ class FantasyGolfApp {
 
     // History view methods
     async loadHistoryView() {
-        await this.loadAllSeasons();
-
-        if (this.allSeasons.length === 0) {
-            this.hideHistoryData();
-            document.getElementById('historyEmptyState').classList.remove('hidden');
-            document.getElementById('historyEmptyMessage').textContent = 'No seasons available.';
-            document.getElementById('historySeasonSelect').innerHTML = '<option value="">No seasons</option>';
-            document.getElementById('historyTournamentSelect').innerHTML = '<option value="">No tournaments</option>';
-            return;
-        }
-
-        const mostRecent = this.allSeasons[0];
-        this.populateHistorySeasonSelect(mostRecent.id);
-        await this.loadHistoryTournaments(mostRecent.id);
-    }
-
-    async loadAllSeasons() {
         try {
-            const response = await fetch(`${API_BASE}/seasons`);
-            if (response.ok) {
-                this.allSeasons = await response.json();
-            }
-        } catch (error) {
-            console.error('Error loading seasons:', error);
-        }
-    }
+            const response = await fetch(`${API_BASE}/tournaments/completed`);
+            const select = document.getElementById('historyTournamentSelect');
 
-    populateHistorySeasonSelect(selectedId) {
-        const select = document.getElementById('historySeasonSelect');
-        select.innerHTML = this.allSeasons.map(s =>
-            '<option value="' + s.id + '"' + (s.id === selectedId ? ' selected' : '') + '>' + s.name + ' (' + s.year + ')</option>'
-        ).join('');
-    }
-
-    async loadHistoryTournaments(seasonId) {
-        try {
-            const response = await fetch(`${API_BASE}/tournaments/${seasonId}/completed`);
             if (response.ok) {
                 const tournaments = await response.json();
-                const select = document.getElementById('historyTournamentSelect');
 
                 if (tournaments.length === 0) {
                     select.innerHTML = '<option value="">No completed tournaments</option>';
                     this.hideHistoryData();
                     document.getElementById('historyEmptyState').classList.remove('hidden');
-                    document.getElementById('historyEmptyMessage').textContent = 'No completed tournaments for this season.';
+                    document.getElementById('historyEmptyMessage').textContent = 'No completed tournaments yet.';
                     return;
                 }
 
                 select.innerHTML = tournaments.map((t, i) =>
-                    '<option value="' + t.id + '"' + (i === 0 ? ' selected' : '') + '>' + t.name + ' (' + this.formatDate(t.start_date) + ' - ' + this.formatDate(t.end_date) + ')</option>'
+                    `<option value="${t.id}"${i === 0 ? ' selected' : ''}>${t.name} (${this.formatDate(t.start_date)} - ${this.formatDate(t.end_date)})</option>`
                 ).join('');
 
+                // Load the first tournament automatically
                 await this.loadHistoryTournamentData(tournaments[0].id);
             }
         } catch (error) {
-            console.error('Error loading completed tournaments:', error);
+            console.error('Error loading history view:', error);
         }
     }
 
@@ -1966,10 +1546,8 @@ class FantasyGolfApp {
 
     // Tournament Import methods
     async loadImportTournaments() {
-        if (!this.currentSeason) return;
-
         try {
-            const response = await fetch(`${API_BASE}/tournaments/${this.currentSeason.id}`);
+            const response = await fetch(`${API_BASE}/tournaments`);
             if (response.ok) {
                 const tournaments = await response.json();
                 const select = document.getElementById('importTournamentSelect');
@@ -2028,7 +1606,6 @@ class FantasyGolfApp {
 
                 this.pendingImportData = data;
 
-                // Call preview endpoint
                 this.showLoading();
                 try {
                     const response = await this.makeAdminRequest(
@@ -2087,13 +1664,11 @@ class FantasyGolfApp {
 
             if (response.ok) {
                 const data = await response.json();
-                // Store preview data (same shape as file import preview)
                 this.importPreviewData = {
                     tournament_name: data.tournament_name,
                     matched: data.matched,
                     unmatched: data.unmatched,
                 };
-                // Store raw player data so commitImport() can look up rounds by slug
                 this.pendingImportData = {
                     tournament: { name: data.tournament_name },
                     players: data.players,
@@ -2118,7 +1693,6 @@ class FantasyGolfApp {
         document.getElementById('importMatchedCount').textContent = preview.matched.length;
         document.getElementById('importUnmatchedCount').textContent = preview.unmatched.length;
 
-        // Matched golfers table
         const matchedContainer = document.getElementById('importMatchedList');
         if (preview.matched.length > 0) {
             let html = '<table><thead><tr><th>JSON Name</th><th>Matched To</th><th>Amateur</th><th>Rounds</th></tr></thead><tbody>';
@@ -2136,7 +1710,6 @@ class FantasyGolfApp {
             matchedContainer.innerHTML = '<p class="loading">No automatic matches found.</p>';
         }
 
-        // Unmatched golfers
         const unmatchedContainer = document.getElementById('importUnmatchedList');
         if (preview.unmatched.length > 0) {
             let html = '';
@@ -2171,7 +1744,6 @@ class FantasyGolfApp {
             });
             unmatchedContainer.innerHTML = html;
 
-            // Listen for changes on selects to update commit button
             document.querySelectorAll('.import-golfer-select').forEach(select => {
                 select.addEventListener('change', () => this.updateImportCommitButton());
             });
@@ -2180,7 +1752,6 @@ class FantasyGolfApp {
         }
 
         document.getElementById('importUnmatchedSection').classList.toggle('hidden', preview.unmatched.length === 0);
-
         this.updateImportCommitButton();
     }
 
@@ -2221,7 +1792,6 @@ class FantasyGolfApp {
 
     selectImportGolfer(index, golferId, golferName) {
         const select = document.querySelector(`.import-golfer-select[data-index="${index}"]`);
-        // Add option if not present
         let optionExists = false;
         for (const opt of select.options) {
             if (opt.value === golferId) {
@@ -2238,7 +1808,6 @@ class FantasyGolfApp {
             select.appendChild(option);
         }
 
-        // Clear search
         const searchInput = document.querySelector(`.import-golfer-search[data-index="${index}"]`);
         if (searchInput) searchInput.value = '';
         document.getElementById(`importSearchResults_${index}`).classList.add('hidden');
@@ -2250,12 +1819,10 @@ class FantasyGolfApp {
         const form = document.getElementById(`newGolferForm_${index}`);
         const select = document.querySelector(`.import-golfer-select[data-index="${index}"]`);
         if (form.classList.contains('hidden')) {
-            // Show new golfer form, disable the select dropdown
             form.classList.remove('hidden');
             form.style.display = 'flex';
             select.disabled = true;
             select.value = '';
-            // Mark this card as "adding new golfer"
             form.dataset.active = 'true';
         } else {
             this.cancelNewGolferForm(index);
@@ -2342,10 +1909,8 @@ class FantasyGolfApp {
         const preview = this.importPreviewData;
         const rawData = this.pendingImportData;
 
-        // Build player_scores array from matched + resolved unmatched
         const playerScores = [];
 
-        // Add matched golfers
         for (const m of preview.matched) {
             const player = rawData.players.find(p => p.slug === m.slug);
             if (!player) continue;
@@ -2367,7 +1932,6 @@ class FantasyGolfApp {
             playerScores.push(entry);
         }
 
-        // Add resolved unmatched golfers (mapped to existing DB golfer)
         const newGolfers = [];
         const unmatchedSelects = document.querySelectorAll('.import-golfer-select');
         unmatchedSelects.forEach(select => {
@@ -2376,7 +1940,6 @@ class FantasyGolfApp {
             const player = rawData.players.find(p => p.slug === slug);
             if (!player) return;
 
-            // Check if this unmatched golfer is being added as a new golfer
             const newGolferForm = document.getElementById(`newGolferForm_${idx}`);
             if (newGolferForm && newGolferForm.dataset.active === 'true') {
                 const groupSelect = document.querySelector(`.new-golfer-group[data-index="${idx}"]`);
@@ -2401,7 +1964,7 @@ class FantasyGolfApp {
             }
 
             const golferId = select.value;
-            if (!golferId) return; // Skipped
+            if (!golferId) return;
 
             const entry = {
                 golfer_id: golferId,

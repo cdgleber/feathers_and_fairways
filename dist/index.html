@@ -100,28 +100,21 @@
                         <p class="stat-label">Active Tournaments</p>
                     </div>
                 </div>
-
-                <div class="content-section">
-                    <h3 class="section-title">Current Season</h3>
-                    <div id="currentSeasonInfo" class="info-card">
-                        <p class="loading">Loading season information...</p>
-                    </div>
-                </div>
             </div>
 
             <!-- Join League View -->
             <div id="joinView" class="view">
                 <h2 class="page-title">Join the League</h2>
-                
+
                 <div class="card">
                     <h3 class="card-title">Enter Your Access Key</h3>
                     <form id="validateKeyForm" class="form">
                         <div class="form-group">
                             <label for="accessKey" class="form-label">Access Key</label>
-                            <input 
-                                type="text" 
-                                id="accessKey" 
-                                class="form-input" 
+                            <input
+                                type="text"
+                                id="accessKey"
+                                class="form-input"
                                 placeholder="XXXX-XXXX-XXXX"
                                 maxlength="14"
                                 required>
@@ -136,54 +129,18 @@
                 <div id="teamBuilderSection" class="card hidden">
                     <!-- Content will be dynamically loaded here -->
                 </div>
-
-                <!-- <div id="teamCreatedSection" class="card hidden success-card">
-                    <div class="success-icon">
-                        <span class="material-icons">check_circle</span>
-                    </div>
-                    <h3>Team Saved Successfully!</h3>
-                    <p id="teamCreatedMessage"></p>
-                    <button class="btn btn-primary" onclick="app.showView('leaderboard')">
-                        View Leaderboard
-                    </button>
-                </div>
-                    <div class="success-icon">
-                        <span class="material-icons">check_circle</span>
-                    </div>
-                    <h3>Team Created Successfully!</h3>
-                    <p id="teamCreatedMessage"></p>
-                    <button class="btn btn-primary" onclick="app.showView('leaderboard')">
-                        View Leaderboard
-                    </button>
-                </div> -->
             </div>
 
             <!-- Leaderboard View -->
             <div id="leaderboardView" class="view">
                 <h2 class="page-title">Leaderboard</h2>
-                
-                <div class="tabs">
-                    <button class="tab active" data-tab="season">Season Standings</button>
-                    <button class="tab" data-tab="tournament">Tournament Scores</button>
+
+                <div class="form-group">
+                    <label for="tournamentSelect" class="form-label">Select Tournament</label>
+                    <select id="tournamentSelect" class="form-input"></select>
                 </div>
-
-                <div class="tab-content">
-                    <div id="seasonTab" class="tab-pane active">
-                        <div class="card">
-                            <div id="seasonLeaderboard" class="leaderboard"></div>
-                        </div>
-                    </div>
-
-                    <div id="tournamentTab" class="tab-pane">
-                        <div class="form-group">
-                            <label for="tournamentSelect" class="form-label">Select Tournament</label>
-                            <select id="tournamentSelect" class="form-input"></select>
-                        </div>
-                        <div class="card">
-                            <div id="tournamentLeaderboard" class="leaderboard"></div>
-                        </div>
-                    </div>
-
+                <div class="card">
+                    <div id="tournamentLeaderboard" class="leaderboard"></div>
                 </div>
             </div>
 
@@ -191,19 +148,11 @@
             <div id="historyView" class="view">
                 <h2 class="page-title">Tournament History</h2>
 
-                <div class="history-selectors">
-                    <div class="form-group">
-                        <label for="historySeasonSelect" class="form-label">Season</label>
-                        <select id="historySeasonSelect" class="form-input">
-                            <option value="">Loading seasons...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="historyTournamentSelect" class="form-label">Tournament</label>
-                        <select id="historyTournamentSelect" class="form-input">
-                            <option value="">Select a tournament</option>
-                        </select>
-                    </div>
+                <div class="form-group">
+                    <label for="historyTournamentSelect" class="form-label">Tournament</label>
+                    <select id="historyTournamentSelect" class="form-input">
+                        <option value="">Loading tournaments...</option>
+                    </select>
                 </div>
 
                 <div id="historyEmptyState" class="card hidden">
@@ -230,7 +179,7 @@
             <!-- Admin View -->
             <div id="adminView" class="view">
                 <h2 class="page-title">Admin Panel</h2>
-                
+
                 <!-- Admin Login Modal -->
                 <div id="adminLoginModal" class="modal">
                     <div class="modal-content">
@@ -244,7 +193,7 @@
                         </form>
                     </div>
                 </div>
-                
+
                 <div id="adminContent" class="hidden">
 
                 <div class="tabs" id="adminTabs">
@@ -267,35 +216,6 @@
                         </div>
                     </div>
 
-                    <!-- Season Management -->
-                    <div class="card">
-                        <h3 class="card-title">
-                            <span class="material-icons">calendar_today</span>
-                            Season Management
-                        </h3>
-                        <form id="createSeasonForm" class="form">
-                            <div class="form-group">
-                                <label for="seasonName" class="form-label">Season Name</label>
-                                <input type="text" id="seasonName" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="seasonYear" class="form-label">Year</label>
-                                <input type="number" id="seasonYear" class="form-input" required>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="seasonStart" class="form-label">Start Date</label>
-                                    <input type="date" id="seasonStart" class="form-input" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="seasonEnd" class="form-label">End Date</label>
-                                    <input type="date" id="seasonEnd" class="form-input" required>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Create Season</button>
-                        </form>
-                    </div>
-
                     <!-- Access Keys -->
                     <div class="card">
                         <h3 class="card-title">
@@ -303,6 +223,12 @@
                             Generate Access Keys
                         </h3>
                         <form id="generateKeysForm" class="form">
+                            <div class="form-group">
+                                <label for="keyTournamentSelect" class="form-label">Tournament</label>
+                                <select id="keyTournamentSelect" class="form-input" required>
+                                    <option value="">Select a tournament</option>
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <label for="keyCount" class="form-label">Number of Keys</label>
                                 <input type="number" id="keyCount" class="form-input" min="1" max="50" value="10" required>
@@ -324,40 +250,45 @@
                                 <input type="text" id="golferName" class="form-input" required>
                             </div>
                             <div class="form-group">
-                                <label for="winGroup" class="form-label">Win Probability Group (1-6)</label>
+                                <label for="winGroup" class="form-label">Win Probability Group (1-9)</label>
                                 <select id="winGroup" class="form-input" required>
                                     <option value="1">Group 1 (Highest)</option>
                                     <option value="2">Group 2</option>
                                     <option value="3">Group 3</option>
                                     <option value="4">Group 4</option>
                                     <option value="5">Group 5</option>
-                                    <option value="6">Group 6 (Lowest)</option>
+                                    <option value="6">Group 6</option>
+                                    <option value="7">Group 7</option>
+                                    <option value="8">Group 8</option>
+                                    <option value="9">Group 9 (Lowest)</option>
                                 </select>
                             </div>
                             <button type="submit" class="btn btn-primary">Add Golfer</button>
                         </form>
                     </div>
 
-                    <!-- Golfer Upload -->
+                    <!-- Paste Golfers -->
                     <div class="card">
                         <h3 class="card-title">
-                            <span class="material-icons">upload_file</span>
-                            Upload Golfers (JSON)
+                            <span class="material-icons">content_paste</span>
+                            Paste Golfer Names
                         </h3>
                         <div class="form">
                             <div class="form-group">
-                                <label for="golferFileInput" class="form-label">Golfer File (.json)</label>
-                                <input type="file" id="golferFileInput" class="form-input" accept=".json">
+                                <label for="pasteGolferNames" class="form-label">Golfer Names (one per line)</label>
+                                <textarea id="pasteGolferNames" class="form-input" rows="8" placeholder="Tiger Woods&#10;Rory McIlroy&#10;Scottie Scheffler&#10;..."></textarea>
                             </div>
-                            <div id="golferPreview" class="hidden">
-                                <h4 class="card-title">Preview</h4>
-                                <div id="golferPreviewContent"></div>
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="pasteGolferAmateur">
+                                    <span>Mark all as amateurs</span>
+                                </label>
                             </div>
-                            <button class="btn btn-primary" id="uploadGolfersBtn" disabled onclick="app.uploadGolfers()">
-                                <span class="material-icons">cloud_upload</span>
-                                Upload Golfers
+                            <button class="btn btn-primary" onclick="app.pasteGolfers()">
+                                <span class="material-icons">content_paste</span>
+                                Import Names
                             </button>
-                            <div id="golferUploadResult" class="hidden"></div>
+                            <div id="pasteGolferResult" class="hidden" style="margin-top: var(--spacing-md);"></div>
                         </div>
                     </div>
 
@@ -386,61 +317,44 @@
                         </form>
                     </div>
 
-                    <!-- Score Upload -->
+                    <!-- ESPN Field Fetch -->
                     <div class="card full-width">
                         <h3 class="card-title">
-                            <span class="material-icons">upload_file</span>
-                            Upload Scores (JSON)
+                            <span class="material-icons">download</span>
+                            Fetch ESPN Field &amp; Set Groups
                         </h3>
+                        <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                            Pull the tournament field from ESPN, auto-assign golfers to 9 groups by world ranking, then adjust before saving.
+                        </p>
                         <div class="form">
-                            <div class="form-group">
-                                <label for="scoreUploadTournament" class="form-label">Tournament</label>
-                                <select id="scoreUploadTournament" class="form-input">
-                                    <option value="">Select a tournament</option>
-                                </select>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="fieldTournamentSelect" class="form-label">Tournament</label>
+                                    <select id="fieldTournamentSelect" class="form-input">
+                                        <option value="">Select a tournament</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="fieldEspnId" class="form-label">ESPN Tournament ID</label>
+                                    <div style="display: flex; gap: var(--spacing-sm); align-items: flex-start;">
+                                        <input type="text" id="fieldEspnId" class="form-input" placeholder="e.g. 401811932" style="flex: 1;">
+                                        <button class="btn btn-primary" onclick="app.fetchEspnField()">
+                                            <span class="material-icons">download</span>
+                                            Fetch Field
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="scoreFileInput" class="form-label">Score File (.json)</label>
-                                <input type="file" id="scoreFileInput" class="form-input" accept=".json">
-                            </div>
-                            <div id="scorePreview" class="hidden">
-                                <h4 class="card-title">Preview</h4>
-                                <div id="scorePreviewContent"></div>
-                            </div>
-                            <button class="btn btn-primary" id="uploadScoresBtn" disabled onclick="app.uploadScores()">
-                                <span class="material-icons">cloud_upload</span>
-                                Upload Scores
-                            </button>
-                            <div id="scoreUploadResult" class="hidden"></div>
                         </div>
-                    </div>
 
-                    <!-- Tournament Golfer Groups -->
-                    <div class="card full-width">
-                        <h3 class="card-title">
-                            <span class="material-icons">swap_vert</span>
-                            Tournament Golfer Groups
-                        </h3>
-                        <div class="form">
-                            <div class="form-group">
-                                <label for="groupUploadTournament" class="form-label">Tournament</label>
-                                <select id="groupUploadTournament" class="form-input">
-                                    <option value="">Select a tournament</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="groupFileInput" class="form-label">Groups File (.json)</label>
-                                <input type="file" id="groupFileInput" class="form-input" accept=".json">
-                            </div>
-                            <div id="groupPreview" class="hidden">
-                                <h4 class="card-title">Preview</h4>
-                                <div id="groupPreviewContent"></div>
-                            </div>
-                            <button class="btn btn-primary" id="uploadGroupsBtn" disabled onclick="app.uploadTournamentGroups()">
-                                <span class="material-icons">cloud_upload</span>
-                                Upload Groups
+                        <div id="espnFieldPreview" class="hidden" style="margin-top: var(--spacing-md);">
+                            <h4 style="margin-bottom: var(--spacing-sm);">Group Assignments — drag rows or change dropdowns to adjust, then save.</h4>
+                            <div id="espnFieldGroups"></div>
+                            <button class="btn btn-primary" style="margin-top: var(--spacing-md);" onclick="app.saveGroupAssignments()">
+                                <span class="material-icons">save</span>
+                                Save Group Assignments
                             </button>
-                            <div id="groupUploadResult" class="hidden"></div>
+                            <div id="saveGroupsResult" class="hidden" style="margin-top: var(--spacing-sm);"></div>
                         </div>
                     </div>
                 </div>

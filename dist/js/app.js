@@ -458,11 +458,13 @@ class FantasyGolfApp {
     async loadTournamentLeaderboard(tournamentId) {
         this.showLoading();
         try {
-            const response = await fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}`);
-            if (response.ok) {
-                const leaderboard = await response.json();
-                this.displayTournamentLeaderboard(leaderboard);
-            }
+            const [teamRes, scoreRes] = await Promise.all([
+                fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}/teams`),
+                fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}`)
+            ]);
+            const teamLeaderboard = teamRes.ok ? await teamRes.json() : [];
+            const golferScores = scoreRes.ok ? await scoreRes.json() : [];
+            this.displayTournamentLeaderboard(teamLeaderboard, golferScores);
         } catch (error) {
             this.showToast('Error loading tournament leaderboard', 'error');
             console.error(error);
@@ -471,34 +473,47 @@ class FantasyGolfApp {
         }
     }
 
-    displayTournamentLeaderboard(leaderboard) {
+    displayTournamentLeaderboard(teamLeaderboard, golferScores) {
         const container = document.getElementById('tournamentLeaderboard');
 
-        if (leaderboard.length === 0) {
-            container.innerHTML = '<p class="loading">No scores recorded yet.</p>';
+        if (teamLeaderboard.length === 0) {
+            container.innerHTML = '<p class="loading">No teams registered yet.</p>';
             return;
         }
 
-        container.innerHTML = `
-            <table>
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Golfer</th>
-                        <th>Points</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${leaderboard.map((entry, index) => `
-                        <tr>
-                            <td><span class="rank rank-${index + 1}">#${index + 1}</span></td>
-                            <td>${entry.golfer_name}</td>
-                            <td><span class="points">${entry.total_points}</span></td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
+        const hasScores = golferScores.length > 0;
+        const scoreMap = {};
+        golferScores.forEach(s => { scoreMap[s.golfer_id] = s.total_points; });
+
+        let html = '<div class="team-picks-grid">';
+        teamLeaderboard.forEach((entry, index) => {
+            const rank = index + 1;
+            const golferRows = (entry.golfers || []).map(g => {
+                const pts = scoreMap[g.id] !== undefined ? scoreMap[g.id] : 0;
+                const ptsClass = pts > 0 ? ' positive' : pts < 0 ? ' negative' : '';
+                const ptsLabel = pts > 0 ? `+${pts}` : `${pts}`;
+                return `<li class="team-pick-golfer">
+                    <span class="team-pick-group">G${g.win_probability_group}</span>
+                    <span class="team-pick-name">${g.name}</span>
+                    <span class="team-pick-pts${ptsClass}">${ptsLabel}</span>
+                </li>`;
+            }).join('');
+
+            const totalHtml = hasScores
+                ? `<span class="team-pick-total points">${entry.total_points > 0 ? '+' : ''}${entry.total_points} pts</span>`
+                : '';
+
+            html += `<div class="team-pick-card">
+                <div class="team-pick-header">
+                    <span class="rank rank-${rank}">#${rank}</span>
+                    <span class="team-pick-player">${entry.player_name}</span>
+                    ${totalHtml}
+                </div>
+                <ul class="team-pick-golfers">${golferRows}</ul>
+            </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
     }
 
     async loadAdminData() {

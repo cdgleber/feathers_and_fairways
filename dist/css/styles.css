@@ -634,6 +634,85 @@ body {
     line-height: 1.4;
 }
 
+/* Team Picks Grid (leaderboard view) */
+.team-picks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.team-pick-card {
+    background: var(--surface-variant);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    border: 1px solid var(--border);
+}
+
+.team-pick-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.team-pick-player {
+    font-weight: 600;
+    font-size: 15px;
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.team-pick-total {
+    font-size: 14px;
+    margin-left: auto;
+}
+
+.team-pick-golfers {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.team-pick-golfer {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 13px;
+}
+
+.team-pick-group {
+    background: var(--primary);
+    color: #fff;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.team-pick-name {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.team-pick-pts {
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 32px;
+    text-align: right;
+}
+
+.team-pick-pts.positive { color: var(--success); }
+.team-pick-pts.negative { color: var(--error, #f44336); }
+
 /* Admin Grid */
 .admin-grid {
     display: grid;

@@ -41,7 +41,7 @@ COPY --from=builder /app/migrations /app/migrations
 COPY --from=builder /app/dist /app/dist
 
 # Expose port
-EXPOSE 3000
+EXPOSE 41549
 
 # Run the application
 CMD ["/app/feathers_and_fairways"]

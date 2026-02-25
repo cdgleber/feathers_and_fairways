@@ -153,12 +153,12 @@ pub async fn list_golfers_for_tournament(
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
         "SELECT g.id, g.name, \
-         COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+         tgg.win_probability_group, \
          g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
-         LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+         JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
          WHERE g.is_active = 1 \
-         ORDER BY win_probability_group, name"
+         ORDER BY tgg.win_probability_group, g.name"
     )
     .bind(&tournament_id)
     .fetch_all(&pool)
@@ -258,10 +258,10 @@ pub async fn create_team(
     for golfer_id in &payload.golfer_ids {
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
-             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+             tgg.win_probability_group, \
              g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
-             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
         )
         .bind(&payload.tournament_id)
@@ -656,10 +656,10 @@ pub async fn update_team(
     for golfer_id in &payload.golfer_ids {
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
-             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+             tgg.win_probability_group, \
              g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
-             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
         )
         .bind(&payload.tournament_id)
@@ -768,10 +768,10 @@ pub async fn admin_update_team_golfers(
     for golfer_id in &payload.golfer_ids {
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
-             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+             tgg.win_probability_group, \
              g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
-             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
         )
         .bind(&payload.tournament_id)

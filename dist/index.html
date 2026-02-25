@@ -306,11 +306,11 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="tournamentStart" class="form-label">Start Date</label>
-                                    <input type="date" id="tournamentStart" class="form-input" required>
+                                    <input type="date" placeholder="date" id="tournamentStart" class="form-input" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="tournamentEnd" class="form-label">End Date</label>
-                                    <input type="date" id="tournamentEnd" class="form-input" required>
+                                    <input type="date" placeholder="date" id="tournamentEnd" class="form-input" required>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary">Create Tournament</button>
@@ -333,6 +333,7 @@
                                     <select id="fieldTournamentSelect" class="form-input">
                                         <option value="">Select a tournament</option>
                                     </select>
+                                    <div id="fieldStatus" style="margin-top: var(--spacing-xs); font-size: 0.85em; min-height: 1.4em;"></div>
                                 </div>
                                 <div class="form-group">
                                     <label for="fieldEspnId" class="form-label">ESPN Tournament ID</label>

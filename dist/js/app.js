@@ -150,6 +150,11 @@ class FantasyGolfApp {
         document.getElementById('importTournamentSelect')?.addEventListener('change', () => {
             this.updateImportCommitButton();
         });
+
+        // Field tournament select — show current field status
+        document.getElementById('fieldTournamentSelect')?.addEventListener('change', (e) => {
+            this.updateFieldStatus(e.target.value);
+        });
     }
 
     closeMobileNav() {
@@ -714,6 +719,30 @@ class FantasyGolfApp {
         }
     }
 
+    async updateFieldStatus(tournamentId) {
+        const statusEl = document.getElementById('fieldStatus');
+        if (!statusEl) return;
+
+        if (!tournamentId) {
+            statusEl.innerHTML = '';
+            return;
+        }
+
+        statusEl.innerHTML = '<span style="color: var(--text-secondary);">Checking field…</span>';
+        try {
+            const res = await fetch(`${API_BASE}/golfers/tournament/${tournamentId}`);
+            if (!res.ok) { statusEl.innerHTML = ''; return; }
+            const golfers = await res.json();
+            if (golfers.length === 0) {
+                statusEl.innerHTML = '<span style="color: var(--warning, #f59e0b);">⚠ No field assigned — players cannot pick teams until golfers are added.</span>';
+            } else {
+                statusEl.innerHTML = `<span style="color: var(--success, #22c55e);">✓ ${golfers.length} golfers assigned across 9 groups.</span>`;
+            }
+        } catch {
+            statusEl.innerHTML = '';
+        }
+    }
+
     // ESPN Field Fetch
     async fetchEspnField() {
         const tournamentId = document.getElementById('fieldTournamentSelect').value;
@@ -822,6 +851,7 @@ class FantasyGolfApp {
                 resultDiv.innerHTML = `<div class="info-card" style="border-left: 4px solid var(--success);"><p><strong>${result.total_processed}</strong> group assignments saved.</p></div>`;
                 resultDiv.classList.remove('hidden');
                 this.showToast('Group assignments saved!', 'success');
+                this.updateFieldStatus(tournamentId);
             } else {
                 this.showToast(result.message || 'Error saving groups', 'error');
             }

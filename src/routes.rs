@@ -1176,7 +1176,7 @@ async fn fetch_espn_competitor(
         };
 
         let hole_scores = match &espn_round.linescores {
-            Some(ls) => &ls.items,
+            Some(ls) => ls,
             None => continue,
         };
 
@@ -1187,8 +1187,8 @@ async fn fetch_espn_competitor(
 
         let holes: Vec<ImportHole> = hole_scores.iter()
             .filter_map(|h| {
-                let par = h.par?;
-                let score = h.value?;
+                let par = h.par.map(|v| v as i32)?;
+                let score = h.value.map(|v| v as i32)?;
                 let hole_num = h.period?;
                 Some(ImportHole {
                     hole: hole_num,

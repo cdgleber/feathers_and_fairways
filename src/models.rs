@@ -443,23 +443,20 @@ pub struct EspnLinescores {
 pub struct EspnRound {
     #[serde(default)]
     pub period: Option<i32>,
+    // ESPN returns linescores as a raw array, not {items:[...]}
     #[serde(default)]
-    pub linescores: Option<EspnRoundLinescores>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EspnRoundLinescores {
-    pub items: Vec<EspnHoleScore>,
+    pub linescores: Option<Vec<EspnHoleScore>>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct EspnHoleScore {
     #[serde(default)]
     pub period: Option<i32>,
+    // ESPN returns numeric fields as floats (e.g. 4.0)
     #[serde(default)]
-    pub par: Option<i32>,
+    pub par: Option<f64>,
     #[serde(default)]
-    pub value: Option<i32>,
+    pub value: Option<f64>,
 }
 
 // Internal struct for transformed ESPN player data
@@ -548,4 +545,209 @@ pub struct SaveGroupsResponse {
 #[derive(Debug, Deserialize)]
 pub struct TournamentIdQuery {
     pub tournament_id: Option<String>,
+}
+
+#[cfg(test)]
+mod espn_parsing_tests {
+    use super::*;
+
+    /// The outer linescores response from ESPN — a paginated list of rounds.
+    /// Each round has `period` (round number) and `linescores` which is a **raw array**
+    /// of hole score objects (not `{items:[...]}`).
+    #[test]
+    fn test_espn_linescores_parses_raw_array_format() {
+        let json = r#"{
+            "count": 2,
+            "pageIndex": 1,
+            "pageSize": 25,
+            "pageCount": 1,
+            "items": [
+                {
+                    "value": 77.0,
+                    "displayValue": "+6",
+                    "period": 1,
+                    "linescores": [
+                        {"value": 4.0, "displayValue": "4", "period": 10, "scoreType": {"name": "BIRDIE", "displayName": "Birdie"}},
+                        {"value": 5.0, "displayValue": "5", "period": 11, "scoreType": {"name": "PAR", "displayName": "Par"}}
+                    ]
+                },
+                {
+                    "value": 71.0,
+                    "displayValue": "-1",
+                    "period": 2,
+                    "linescores": [
+                        {"value": 3.0, "displayValue": "3", "period": 1, "scoreType": {"name": "BIRDIE", "displayName": "Birdie"}}
+                    ]
+                }
+            ]
+        }"#;
+
+        let parsed: EspnLinescores = serde_json::from_str(json).expect("should parse linescores");
+        assert_eq!(parsed.items.len(), 2);
+
+        let round1 = &parsed.items[0];
+        assert_eq!(round1.period, Some(1));
+        let holes1 = round1.linescores.as_ref().expect("round 1 should have linescores");
+        assert_eq!(holes1.len(), 2);
+        assert_eq!(holes1[0].value, Some(4.0));
+        assert_eq!(holes1[0].period, Some(10));
+        assert_eq!(holes1[1].value, Some(5.0));
+        assert_eq!(holes1[1].period, Some(11));
+
+        let round2 = &parsed.items[1];
+        assert_eq!(round2.period, Some(2));
+        let holes2 = round2.linescores.as_ref().expect("round 2 should have linescores");
+        assert_eq!(holes2.len(), 1);
+        assert_eq!(holes2[0].value, Some(3.0));
+    }
+
+    /// ESPN returns numeric values as floats even for whole numbers (4.0 not 4).
+    #[test]
+    fn test_espn_hole_score_parses_float_values() {
+        let json = r#"{"value": 4.0, "period": 7, "par": 4.0}"#;
+        let score: EspnHoleScore = serde_json::from_str(json).expect("should parse hole score");
+        assert_eq!(score.value, Some(4.0_f64));
+        assert_eq!(score.par, Some(4.0_f64));
+        assert_eq!(score.period, Some(7));
+
+        // Conversion to i32 used in route handler should work correctly
+        assert_eq!(score.value.map(|v| v as i32), Some(4));
+        assert_eq!(score.par.map(|v| v as i32), Some(4));
+    }
+
+    /// Rounds missing linescores (player withdrew / not yet played) should parse cleanly.
+    #[test]
+    fn test_espn_round_without_linescores() {
+        let json = r#"{"value": 77.0, "displayValue": "+6", "period": 1}"#;
+        let round: EspnRound = serde_json::from_str(json).expect("should parse round without linescores");
+        assert_eq!(round.period, Some(1));
+        assert!(round.linescores.is_none());
+    }
+
+    /// Rounds with an empty linescores array should parse as Some([]).
+    #[test]
+    fn test_espn_round_with_empty_linescores() {
+        let json = r#"{"period": 1, "linescores": []}"#;
+        let round: EspnRound = serde_json::from_str(json).expect("should parse round with empty linescores");
+        let holes = round.linescores.expect("should have linescores field");
+        assert!(holes.is_empty());
+    }
+
+    /// The competitor page response (used for pagination) should parse correctly.
+    #[test]
+    fn test_espn_competitor_page_parses() {
+        let json = r#"{
+            "count": 156,
+            "pageIndex": 1,
+            "pageSize": 25,
+            "pageCount": 7,
+            "items": [
+                {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/4848?lang=en&region=us"},
+                {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/780?lang=en&region=us"}
+            ]
+        }"#;
+
+        let page: EspnCompetitorPage = serde_json::from_str(json).expect("should parse competitor page");
+        assert_eq!(page.page_count, 7);
+        assert_eq!(page.items.len(), 2);
+        assert!(page.items[0].href.contains("401811934"));
+    }
+
+    /// The competitor object links to athlete and linescores via $ref.
+    #[test]
+    fn test_espn_competitor_parses_refs() {
+        let json = r#"{
+            "id": "4848",
+            "score": {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/4848/score?lang=en&region=us"},
+            "linescores": {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/4848/linescores?lang=en&region=us"},
+            "athlete": {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/athletes/4848?lang=en&region=us"}
+        }"#;
+
+        let competitor: EspnCompetitor = serde_json::from_str(json).expect("should parse competitor");
+        assert_eq!(competitor.id, "4848");
+        assert!(competitor.linescores.is_some());
+        assert!(competitor.athlete.is_some());
+        assert!(competitor.linescores.unwrap().href.contains("linescores"));
+    }
+
+    /// Competitor with no linescores ref (player withdrawn before play) should have None.
+    #[test]
+    fn test_espn_competitor_without_linescores_ref() {
+        let json = r#"{
+            "id": "9999",
+            "athlete": {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/athletes/9999?lang=en&region=us"}
+        }"#;
+
+        let competitor: EspnCompetitor = serde_json::from_str(json).expect("should parse competitor");
+        assert!(competitor.linescores.is_none());
+        assert!(competitor.score.is_none());
+    }
+
+    /// During a live tournament, a player's round may only have partial holes (e.g. 5 of 18).
+    #[test]
+    fn test_espn_partial_round_during_live_tournament() {
+        let json = r#"{
+            "count": 1,
+            "pageIndex": 1,
+            "pageSize": 25,
+            "pageCount": 1,
+            "items": [
+                {
+                    "value": 18.0,
+                    "displayValue": "-2",
+                    "period": 1,
+                    "linescores": [
+                        {"value": 4.0, "period": 1},
+                        {"value": 3.0, "period": 2},
+                        {"value": 5.0, "period": 3},
+                        {"value": 4.0, "period": 4},
+                        {"value": 2.0, "period": 5}
+                    ]
+                }
+            ]
+        }"#;
+
+        let parsed: EspnLinescores = serde_json::from_str(json).expect("should parse partial round");
+        assert_eq!(parsed.items.len(), 1);
+        let holes = parsed.items[0].linescores.as_ref().unwrap();
+        assert_eq!(holes.len(), 5, "partial round has only 5 holes played");
+        assert_eq!(holes[4].period, Some(5));
+        assert_eq!(holes[4].value, Some(2.0));
+    }
+
+    /// A golfer missing the cut has round 1 and 2 scores but no round 3 or 4.
+    #[test]
+    fn test_espn_cut_player_has_two_rounds() {
+        let json = r#"{
+            "count": 2,
+            "pageIndex": 1,
+            "pageSize": 25,
+            "pageCount": 1,
+            "items": [
+                {
+                    "value": 74.0,
+                    "displayValue": "+3",
+                    "period": 1,
+                    "linescores": [
+                        {"value": 4.0, "period": 1},
+                        {"value": 5.0, "period": 2}
+                    ]
+                },
+                {
+                    "value": 75.0,
+                    "displayValue": "+4",
+                    "period": 2,
+                    "linescores": [
+                        {"value": 5.0, "period": 1},
+                        {"value": 4.0, "period": 2}
+                    ]
+                }
+            ]
+        }"#;
+
+        let parsed: EspnLinescores = serde_json::from_str(json).expect("should parse cut player rounds");
+        assert_eq!(parsed.items.len(), 2);
+        assert_eq!(parsed.items[0].period, Some(1));
+        assert_eq!(parsed.items[1].period, Some(2));
+    }
 }

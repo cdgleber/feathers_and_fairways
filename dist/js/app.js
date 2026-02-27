@@ -7,6 +7,8 @@ class FantasyGolfApp {
         this.validatedKey = null;
         this.adminToken = localStorage.getItem('adminToken');
         this.selectedTournament = null;
+        this.currentHoleScores = [];
+        this.currentTournamentGolfers = [];
         this.init();
     }
 
@@ -154,6 +156,19 @@ class FantasyGolfApp {
         // Field tournament select — show current field status
         document.getElementById('fieldTournamentSelect')?.addEventListener('change', (e) => {
             this.updateFieldStatus(e.target.value);
+        });
+
+        // Scorecard close
+        document.getElementById('scorecardClose')?.addEventListener('click', () =>
+            document.getElementById('scorecardOverlay').classList.add('hidden'));
+        document.getElementById('scorecardOverlay')?.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+        });
+
+        // Golfer row click — delegated
+        document.getElementById('tournamentLeaderboard')?.addEventListener('click', (e) => {
+            const li = e.target.closest('.team-pick-golfer');
+            if (li?.dataset.golferId) this.showScorecardModal(li.dataset.golferId, li.dataset.golferName);
         });
     }
 
@@ -430,13 +445,17 @@ class FantasyGolfApp {
     async loadTournamentLeaderboard(tournamentId) {
         this.showLoading();
         try {
-            const [teamRes, scoreRes] = await Promise.all([
+            const [teamRes, scoreRes, holeScoreRes, golferFieldRes] = await Promise.all([
                 fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}/teams`),
-                fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}`)
+                fetch(`${API_BASE}/leaderboard/tournament/${tournamentId}`),
+                fetch(`${API_BASE}/scores/tournament/${tournamentId}`),
+                fetch(`${API_BASE}/golfers/tournament/${tournamentId}`)
             ]);
             const teamLeaderboard = teamRes.ok ? await teamRes.json() : [];
             const golferScores = scoreRes.ok ? await scoreRes.json() : [];
-            this.displayTournamentLeaderboard(teamLeaderboard, golferScores);
+            this.currentHoleScores = holeScoreRes.ok ? await holeScoreRes.json() : [];
+            this.currentTournamentGolfers = golferFieldRes.ok ? await golferFieldRes.json() : [];
+            this.displayTournamentLeaderboard(teamLeaderboard, golferScores, this.currentHoleScores, this.currentTournamentGolfers);
         } catch (error) {
             this.showToast('Error loading tournament leaderboard', 'error');
             console.error(error);
@@ -445,7 +464,7 @@ class FantasyGolfApp {
         }
     }
 
-    displayTournamentLeaderboard(teamLeaderboard, golferScores) {
+    displayTournamentLeaderboard(teamLeaderboard, golferScores, allHoleScores = [], tournamentGolfers = []) {
         const container = document.getElementById('tournamentLeaderboard');
 
         if (teamLeaderboard.length === 0) {
@@ -464,7 +483,8 @@ class FantasyGolfApp {
                 const pts = scoreMap[g.id] !== undefined ? scoreMap[g.id] : 0;
                 const ptsClass = pts > 0 ? ' positive' : pts < 0 ? ' negative' : '';
                 const ptsLabel = pts > 0 ? `+${pts}` : `${pts}`;
-                return `<li class="team-pick-golfer">
+                const safeName = g.name.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+                return `<li class="team-pick-golfer" data-golfer-id="${g.id}" data-golfer-name="${safeName}" style="cursor:pointer">
                     <span class="team-pick-group">G${g.win_probability_group}</span>
                     <span class="team-pick-name">${g.name}</span>
                     <span class="team-pick-pts${ptsClass}">${ptsLabel}</span>
@@ -485,7 +505,108 @@ class FantasyGolfApp {
             </div>`;
         });
         html += '</div>';
+        html += this.buildPerfectTeamHTML(allHoleScores, tournamentGolfers);
         container.innerHTML = html;
+    }
+
+    showScorecardModal(golferId, golferName) {
+        const scores = this.currentHoleScores.filter(s => s.golfer_id === golferId);
+
+        document.getElementById('scorecardGolferName').textContent = golferName;
+
+        const wrap = document.getElementById('scorecardTableWrap');
+        if (scores.length === 0) {
+            wrap.innerHTML = '<p class="scorecard-no-scores">No hole-by-hole scores available yet.</p>';
+        } else {
+            const byDay = {};
+            scores.forEach(s => {
+                if (!byDay[s.day]) byDay[s.day] = {};
+                byDay[s.day][s.hole] = s.fantasy_points;
+            });
+
+            const days = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+            const allHoles = [...new Set(scores.map(s => s.hole))].sort((a, b) => a - b);
+
+            const ptClass = fp => fp >= 2 ? 'pts-eagle' : fp === 1 ? 'pts-birdie' : fp === 0 ? 'pts-par' : 'pts-bogey';
+            const ptLabel = fp => fp > 0 ? `+${fp}` : `${fp}`;
+
+            let headerCells = allHoles.map(h => `<th>${h}</th>`).join('');
+            let tableHtml = `<table class="scorecard-table">
+                <thead><tr>
+                    <th class="day-label">Round</th>${headerCells}<th class="row-total">Total</th>
+                </tr></thead><tbody>`;
+
+            let grandTotal = 0;
+            days.forEach(day => {
+                const dayData = byDay[day];
+                let dayTotal = 0;
+                const cells = allHoles.map(hole => {
+                    if (dayData[hole] !== undefined) {
+                        const fp = dayData[hole];
+                        dayTotal += fp;
+                        return `<td class="${ptClass(fp)}">${ptLabel(fp)}</td>`;
+                    }
+                    return `<td class="no-score">—</td>`;
+                }).join('');
+                grandTotal += dayTotal;
+                const dayLabel = dayTotal > 0 ? `+${dayTotal}` : `${dayTotal}`;
+                tableHtml += `<tr>
+                    <td class="day-label">R${day}</td>${cells}<td class="row-total">${dayLabel}</td>
+                </tr>`;
+            });
+
+            const grandLabel = grandTotal > 0 ? `+${grandTotal}` : `${grandTotal}`;
+            const emptyHoles = allHoles.map(() => '<td></td>').join('');
+            tableHtml += `<tr>
+                <td class="day-label row-total">Total</td>${emptyHoles}<td class="row-total">${grandLabel}</td>
+            </tr></tbody></table>`;
+
+            wrap.innerHTML = tableHtml;
+        }
+
+        document.getElementById('scorecardOverlay').classList.remove('hidden');
+    }
+
+    buildPerfectTeamHTML(allHoleScores, tournamentGolfers) {
+        if (tournamentGolfers.length === 0) return '';
+
+        const totals = {};
+        allHoleScores.forEach(s => {
+            totals[s.golfer_id] = (totals[s.golfer_id] || 0) + s.fantasy_points;
+        });
+
+        const noScores = allHoleScores.length === 0;
+
+        let rows = '';
+        let grandTotal = 0;
+        for (let grp = 1; grp <= 9; grp++) {
+            const inGroup = tournamentGolfers.filter(g => g.win_probability_group === grp);
+            if (inGroup.length === 0) continue;
+            const best = inGroup.reduce((a, b) => (totals[a.id] || 0) >= (totals[b.id] || 0) ? a : b);
+            const pts = totals[best.id] || 0;
+            grandTotal += pts;
+            const ptsLabel = pts > 0 ? `+${pts}` : `${pts}`;
+            const ptsClass = pts > 0 ? ' positive' : pts < 0 ? ' negative' : '';
+            rows += `<div class="perfect-team-row">
+                <span class="team-pick-group">G${grp}</span>
+                <span class="team-pick-name">${best.name}</span>
+                <span class="team-pick-pts${ptsClass}">${ptsLabel}</span>
+            </div>`;
+        }
+
+        const totalHtml = noScores
+            ? '<p class="perfect-team-subtitle" style="margin-top:8px">Scores not yet available</p>'
+            : `<p class="perfect-team-total">${grandTotal > 0 ? '+' : ''}${grandTotal} pts total</p>`;
+
+        return `<div class="perfect-team-section">
+            <div class="perfect-team-heading">
+                <span class="material-icons" style="color:#f5c518">emoji_events</span>
+                Perfect Team
+            </div>
+            <p class="perfect-team-subtitle">Best scorer from each group this tournament</p>
+            <div class="perfect-team-grid">${rows}</div>
+            ${totalHtml}
+        </div>`;
     }
 
     async loadAdminData() {

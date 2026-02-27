@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Protected admin routes (these will have middleware applied)
         .nest("/api/admin", Router::new()
-            .route("/access-keys", post(routes::create_access_keys))
+            .route("/access-keys", get(routes::list_access_keys).post(routes::create_access_keys))
             .route("/golfers", post(routes::create_golfer))
             .route("/golfers/paste", post(routes::paste_golfers))
             .route("/tournaments", post(routes::create_tournament))

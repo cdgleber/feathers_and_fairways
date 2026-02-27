@@ -76,6 +76,24 @@ pub async fn create_access_keys(
     Ok((StatusCode::CREATED, Json(keys)))
 }
 
+pub async fn list_access_keys(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<Vec<AccessKeyDetail>>, (StatusCode, Json<ApiError>)> {
+    let keys = sqlx::query_as::<_, AccessKeyDetail>(
+        "SELECT ak.id, ak.key_code, ak.is_used, ak.created_at, \
+         t.name as tournament_name, te.player_name as team_name \
+         FROM access_keys ak \
+         JOIN tournaments t ON ak.tournament_id = t.id \
+         LEFT JOIN teams te ON te.access_key_id = ak.id \
+         ORDER BY ak.created_at DESC"
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(keys))
+}
+
 pub async fn validate_access_key(
     State(pool): State<SqlitePool>,
     Json(payload): Json<ValidateAccessKeyRequest>,

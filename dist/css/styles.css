@@ -748,6 +748,27 @@ body {
     color: var(--primary);
 }
 
+/* Status Badges */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+.badge-neutral {
+    background: var(--surface-variant);
+    color: var(--text-secondary);
+}
+
 /* Success Card */
 .success-card {
     text-align: center;

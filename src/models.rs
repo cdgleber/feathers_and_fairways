@@ -52,6 +52,16 @@ pub struct AccessKeyValidationResponse {
 }
 
 #[derive(Debug, Serialize, FromRow)]
+pub struct AccessKeyDetail {
+    pub id: String,
+    pub key_code: String,
+    pub is_used: bool,
+    pub created_at: Option<String>,
+    pub tournament_name: String,
+    pub team_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, FromRow)]
 pub struct Team {
     pub id: String,
     pub tournament_id: String,

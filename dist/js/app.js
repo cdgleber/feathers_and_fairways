@@ -212,6 +212,8 @@ class FantasyGolfApp {
             this.loadTeamEditorTournaments();
         } else if (tabName === 'import') {
             this.loadImportTournaments();
+        } else if (tabName === 'accessKeys') {
+            this.loadAccessKeysTable();
         }
     }
 
@@ -610,7 +612,6 @@ class FantasyGolfApp {
     }
 
     async loadAdminData() {
-        await this.loadAdminStats();
         await this.loadAllTournamentsForAdmin();
     }
 
@@ -664,6 +665,7 @@ class FantasyGolfApp {
                 const keys = await response.json();
                 this.displayGeneratedKeys(keys);
                 this.showToast(`${count} access keys generated!`, 'success');
+                this.loadAccessKeysTable();
             } else {
                 const error = await response.json();
                 this.showToast(error.message || 'Error generating keys', 'error');
@@ -688,6 +690,48 @@ class FantasyGolfApp {
                 </button>
             </div>
         `).join('');
+    }
+
+    async loadAccessKeysTable() {
+        const container = document.getElementById('accessKeysTableContent');
+        if (!container) return;
+        container.innerHTML = '<p class="loading">Loading keys...</p>';
+        try {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/access-keys`);
+            if (!response.ok) {
+                container.innerHTML = '<p class="error">Failed to load access keys.</p>';
+                return;
+            }
+            const keys = await response.json();
+            if (keys.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary);">No access keys found.</p>';
+                return;
+            }
+            let html = '<div class="leaderboard"><table><thead><tr>' +
+                '<th>Key</th><th>Tournament</th><th>Status</th><th>Team</th><th>Created</th>' +
+                '</tr></thead><tbody>';
+            keys.forEach(key => {
+                const statusBadge = key.is_used
+                    ? '<span class="badge badge-success">Used</span>'
+                    : '<span class="badge badge-neutral">Unused</span>';
+                const teamName = key.team_name
+                    ? this.escapeHtml(key.team_name)
+                    : '<span style="color: var(--text-secondary);">—</span>';
+                const created = key.created_at ? this.formatDate(key.created_at.substring(0, 10)) : '—';
+                html += `<tr>
+                    <td><code>${this.escapeHtml(key.key_code)}</code></td>
+                    <td>${this.escapeHtml(key.tournament_name)}</td>
+                    <td>${statusBadge}</td>
+                    <td>${teamName}</td>
+                    <td>${created}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<p class="error">Error loading access keys.</p>';
+            console.error(error);
+        }
     }
 
     async addGolfer() {
@@ -964,6 +1008,14 @@ class FantasyGolfApp {
         }).catch(() => {
             this.showToast('Failed to copy', 'error');
         });
+    }
+
+    escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     showLoading() {

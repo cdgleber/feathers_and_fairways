@@ -203,44 +203,11 @@ class FantasyGolfApp {
     async loadInitialData() {
         this.showLoading();
         try {
-            await this.loadStats();
         } catch (error) {
             this.showToast('Error loading data', 'error');
             console.error(error);
         } finally {
             this.hideLoading();
-        }
-    }
-
-    async loadStats() {
-        try {
-            const [golfersRes, tournamentsRes] = await Promise.all([
-                fetch(`${API_BASE}/golfers`),
-                fetch(`${API_BASE}/tournaments`),
-            ]);
-
-            if (golfersRes.ok) {
-                const golfers = await golfersRes.json();
-                document.getElementById('totalGolfers').textContent = golfers.length;
-            }
-
-            if (tournamentsRes.ok) {
-                const tournaments = await tournamentsRes.json();
-                const active = tournaments.filter(t => t.is_active).length;
-                document.getElementById('activeTournaments').textContent = active;
-
-                // Count teams across all tournaments — use first active tournament if any
-                const activeTournament = tournaments.find(t => t.is_active);
-                if (activeTournament) {
-                    const teamsRes = await fetch(`${API_BASE}/teams?tournament_id=${activeTournament.id}`);
-                    if (teamsRes.ok) {
-                        const teams = await teamsRes.json();
-                        document.getElementById('totalTeams').textContent = teams.length;
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error loading stats:', error);
         }
     }
 
@@ -622,7 +589,6 @@ class FantasyGolfApp {
             if (response.ok) {
                 this.showToast('Golfer added successfully!', 'success');
                 document.getElementById('addGolferForm').reset();
-                await this.loadStats();
             } else {
                 const error = await response.json();
                 this.showToast(error.message || 'Error adding golfer', 'error');
@@ -672,7 +638,6 @@ class FantasyGolfApp {
                 resultDiv.classList.remove('hidden');
                 this.showToast(`${created} golfers created!`, 'success');
                 textarea.value = '';
-                await this.loadStats();
             } else {
                 this.showToast(result.message || 'Error importing golfers', 'error');
             }
@@ -705,7 +670,6 @@ class FantasyGolfApp {
             if (response.ok) {
                 this.showToast('Tournament created successfully!', 'success');
                 document.getElementById('createTournamentForm').reset();
-                await this.loadStats();
                 await this.loadAllTournamentsForAdmin();
             } else {
                 const error = await response.json();

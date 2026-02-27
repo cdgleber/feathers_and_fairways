@@ -83,21 +83,115 @@
                     <p class="hero-subtitle">Build your dream team and compete for glory</p>
                 </div>
 
-                <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card">
-                        <span class="material-icons stat-icon">groups</span>
-                        <h3 class="stat-value" id="totalTeams">0</h3>
-                        <p class="stat-label">Teams</p>
+                <!-- How to Join -->
+                <div class="card">
+                    <h3 class="card-title">
+                        <span class="material-icons">sports_golf</span>
+                        How to Join a Tournament
+                    </h3>
+                    <div class="guide-steps">
+                        <div class="guide-step">
+                            <div class="guide-step-number">1</div>
+                            <div class="guide-step-body">
+                                <strong>Get your access key</strong>
+                                <p>Your commissioner will give you a unique access key for the tournament. Keys look like <code>XXXX-XXXX-XXXX</code> and can only be used once.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="guide-step-number">2</div>
+                            <div class="guide-step-body">
+                                <strong>Go to Join League</strong>
+                                <p>Click <strong>Join League</strong> in the navigation bar, then enter your access key and click <em>Validate Key</em>.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="guide-step-number">3</div>
+                            <div class="guide-step-body">
+                                <strong>Enter your name &amp; pick your team</strong>
+                                <p>You'll be shown the golfer field split into 9 groups. Pick <strong>exactly one golfer from each group</strong> for a 9-player team.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="guide-step-number">4</div>
+                            <div class="guide-step-body">
+                                <strong>Submit before the tournament starts</strong>
+                                <p>Teams lock when the tournament begins. Once submitted, check the <strong>Leaderboard</strong> tab to follow your team's fantasy points in real time.</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <span class="material-icons stat-icon">sports_golf</span>
-                        <h3 class="stat-value" id="totalGolfers">0</h3>
-                        <p class="stat-label">Golfers</p>
+                </div>
+
+                <!-- Player Groups -->
+                <div class="card">
+                    <h3 class="card-title">
+                        <span class="material-icons">groups</span>
+                        How Golfer Groups Work
+                    </h3>
+                    <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                        Every golfer in the tournament field is assigned to one of <strong>9 groups</strong> based on their world ranking and win probability for that event.
+                    </p>
+                    <div class="guide-groups-grid">
+                        <div class="guide-group-item guide-group-elite">
+                            <span class="guide-group-badge">1</span>
+                            <div>
+                                <strong>Group 1 — Elite</strong>
+                                <p>Top-ranked favourites. Highest ceiling, most likely to contend.</p>
+                            </div>
+                        </div>
+                        <div class="guide-group-item guide-group-mid">
+                            <span class="guide-group-badge">2 – 5</span>
+                            <div>
+                                <strong>Groups 2–5 — Contenders</strong>
+                                <p>Strong players with a realistic shot at a top finish.</p>
+                            </div>
+                        </div>
+                        <div class="guide-group-item guide-group-long">
+                            <span class="guide-group-badge">6 – 9</span>
+                            <div>
+                                <strong>Groups 6–9 — Long Shots</strong>
+                                <p>Lower-ranked players. Higher risk, but a hot week can make your team.</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <span class="material-icons stat-icon">emoji_events</span>
-                        <h3 class="stat-value" id="activeTournaments">0</h3>
-                        <p class="stat-label">Active Tournaments</p>
+                    <p style="margin-top: var(--spacing-md); color: var(--text-secondary); font-size: 14px;">
+                        Because you must pick one golfer per group, every team has the same structural balance — your edge comes from picking the right players within each tier.
+                    </p>
+                </div>
+
+                <!-- Scoring -->
+                <div class="card">
+                    <h3 class="card-title">
+                        <span class="material-icons">calculate</span>
+                        Fantasy Point Scoring
+                    </h3>
+                    <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                        Fantasy points are awarded <strong>per hole</strong> for each golfer on your team, then summed across all four rounds.
+                    </p>
+                    <div class="guide-scoring-table">
+                        <div class="guide-score-row guide-score-eagle">
+                            <span class="guide-score-label">Eagle or better</span>
+                            <span class="guide-score-result guide-score-result-pos">+2 pts</span>
+                            <span class="guide-score-detail">2 or more under par on a hole</span>
+                        </div>
+                        <div class="guide-score-row guide-score-birdie">
+                            <span class="guide-score-label">Birdie</span>
+                            <span class="guide-score-result guide-score-result-pos">+1 pt</span>
+                            <span class="guide-score-detail">1 under par on a hole</span>
+                        </div>
+                        <div class="guide-score-row guide-score-par">
+                            <span class="guide-score-label">Par</span>
+                            <span class="guide-score-result">0 pts</span>
+                            <span class="guide-score-detail">Even on a hole</span>
+                        </div>
+                        <div class="guide-score-row guide-score-bogey">
+                            <span class="guide-score-label">Bogey or worse</span>
+                            <span class="guide-score-result guide-score-result-neg">−1 pt</span>
+                            <span class="guide-score-detail">1 or more over par on a hole</span>
+                        </div>
+                    </div>
+                    <div class="guide-amateur-note">
+                        <span class="material-icons" style="font-size: 18px; flex-shrink: 0;">info</span>
+                        <span><strong>Amateur rule:</strong> Amateur golfers cannot receive negative fantasy points. Bogeys and worse score <strong>0</strong> instead of &minus;1.</span>
                     </div>
                 </div>
             </div>

@@ -1266,17 +1266,19 @@ pub async fn fetch_espn_field(
     let client = std::sync::Arc::new(client);
     let mut handles = Vec::new();
 
-    for comp_ref in all_competitor_refs {
+    for (orig_idx, comp_ref) in all_competitor_refs.into_iter().enumerate() {
         let sem = semaphore.clone();
         let client = client.clone();
         let handle = tokio::spawn(async move {
             let _permit = sem.acquire().await.unwrap();
-            // Fetch competitor to get athlete ref, then fetch athlete
-            let result: Result<(String, Option<String>), String> = async {
+            // Fetch competitor to get athlete ref + world rank, then fetch athlete
+            let result: Result<(String, Option<String>, Option<i64>, usize), String> = async {
                 let competitor: EspnCompetitor = client.get(&comp_ref).send().await
                     .map_err(|e| format!("competitor fetch: {}", e))?
                     .json().await
                     .map_err(|e| format!("competitor parse: {}", e))?;
+
+                let world_rank = competitor.sort_order;
 
                 let athlete_ref = competitor.athlete
                     .ok_or_else(|| "no athlete ref".to_string())?;
@@ -1294,15 +1296,15 @@ pub async fn fetch_espn_field(
                             athlete.last_name.as_deref().unwrap_or("")
                         ).trim().to_string()
                     });
-                Ok((name, espn_id))
+                Ok((name, espn_id, world_rank, orig_idx))
             }.await;
             result
         });
         handles.push(handle);
     }
 
-    // Collect field in order (ESPN order approximates world rank)
-    let mut field: Vec<(String, Option<String>)> = Vec::new();
+    // Collect field; sort afterward so ordering is deterministic
+    let mut field: Vec<(String, Option<String>, Option<i64>, usize)> = Vec::new();
     for handle in handles {
         match handle.await {
             Ok(Ok(data)) => field.push(data),
@@ -1316,12 +1318,41 @@ pub async fn fetch_espn_field(
         return Err((StatusCode::BAD_GATEWAY, Json(ApiError::new("No competitors found in ESPN field"))));
     }
 
-    // Divide into 9 equal groups (best players = group 1)
-    let group_size = (total + 8) / 9; // ceiling division
+    // Sort by world ranking ascending (best = lowest number = Group 1).
+    // ESPN's sortOrder is the OWGR-based seeding value for PGA events.
+    // Fall back to original ESPN page order when sortOrder is absent.
+    let has_rankings = field.iter().any(|(_, _, rank, _)| rank.is_some());
+    field.sort_by(|a, b| match (&a.2, &b.2) {
+        (Some(ra), Some(rb)) => ra.cmp(rb),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.3.cmp(&b.3),
+    });
+
+    // Determine the ranking range so groups are evenly spaced across it.
+    // Group 1 covers the best-ranked players; Group 9 the worst.
+    // Groups may have different sizes; similar-ranked players land in the same group.
+    let (min_rank, max_rank) = if has_rankings {
+        let min = field.iter().filter_map(|(_, _, r, _)| *r).min().unwrap_or(1);
+        let max = field.iter().filter_map(|(_, _, r, _)| *r).max().unwrap_or(1);
+        (min, max)
+    } else {
+        (0_i64, (total as i64).saturating_sub(1).max(0))
+    };
+    let rank_range = (max_rank - min_rank).max(1);
+
     let mut groups: Vec<EspnFieldGroup> = (1..=9).map(|g| EspnFieldGroup { group: g, golfers: Vec::new() }).collect();
 
-    for (i, (name, espn_athlete_id)) in field.into_iter().enumerate() {
-        let group_idx = (i / group_size).min(8); // 0-based, max 8
+    for (idx, (name, espn_athlete_id, world_rank, _)) in field.into_iter().enumerate() {
+        // Use the actual world rank when available; otherwise use position in sorted list.
+        let rank_value = if has_rankings {
+            world_rank.unwrap_or(max_rank + 1) // unranked → placed just past worst ranked → group 9
+        } else {
+            idx as i64
+        };
+        let rank_offset = (rank_value - min_rank).max(0);
+        let group_idx = ((rank_offset as f64 / (rank_range + 1) as f64) * 9.0).floor() as usize;
+        let group_idx = group_idx.min(8); // 0-based, max 8
 
         // Upsert golfer: find by ESPN ID or name, create if not found
         #[derive(sqlx::FromRow)]

@@ -413,6 +413,8 @@ pub struct EspnCompetitor {
     pub score: Option<EspnScoreRef>,
     pub linescores: Option<EspnLinescoresRef>,
     pub athlete: Option<EspnAthleteRef>,
+    /// ESPN field seeding position (typically OWGR for PGA events)
+    pub sort_order: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]

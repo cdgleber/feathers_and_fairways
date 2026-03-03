@@ -230,7 +230,7 @@ class FantasyGolfApp {
 
     async validateAccessKey() {
         const keyInput = document.getElementById('accessKey');
-        const key = keyInput.value.trim().toUpperCase();
+        const key = keyInput.value.trim().toLowerCase();
 
         if (!key) {
             this.showToast('Please enter an access key', 'error');

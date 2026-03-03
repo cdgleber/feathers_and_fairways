@@ -5,6 +5,8 @@ class FantasyGolfApp {
     constructor() {
         this.selectedGolfers = new Map(); // Map<group, golferId>
         this.validatedKey = null;
+        this.validatedTeamId = null;
+        this.keyAlreadyUsed = false;
         this.adminToken = localStorage.getItem('adminToken');
         this.selectedTournament = null;
         this.currentHoleScores = [];
@@ -250,13 +252,17 @@ class FantasyGolfApp {
             if (result.valid && !result.already_used) {
                 this.validatedKey = key;
                 this.validatedTournamentId = result.tournament_id;
+                this.validatedTeamId = null;
+                this.keyAlreadyUsed = false;
                 this.showToast('Access key validated successfully!', 'success');
                 document.getElementById('teamBuilderSection').classList.remove('hidden');
                 await this.loadTournamentsForSelection(result.tournament_id);
             } else if (result.already_used) {
                 this.validatedKey = key;
                 this.validatedTournamentId = result.tournament_id;
-                this.showToast('Access key already used - you can edit existing teams', 'info');
+                this.validatedTeamId = result.team_id || null;
+                this.keyAlreadyUsed = true;
+                this.showToast('Access key already used - you can edit your existing team', 'info');
                 document.getElementById('teamBuilderSection').classList.remove('hidden');
                 await this.loadTournamentsForSelection(result.tournament_id);
             } else {
@@ -372,18 +378,8 @@ class FantasyGolfApp {
 
         this.showLoading();
         try {
-            // Check if updating existing team or creating new
-            const teamsResponse = await fetch(`${API_BASE}/teams?tournament_id=${this.selectedTournament}`);
-            let isUpdate = false;
-
-            if (teamsResponse.ok) {
-                const teams = await teamsResponse.json();
-                const existingTeam = teams.find(t =>
-                    t.tournament_id === this.selectedTournament &&
-                    t.player_name === playerName
-                );
-                isUpdate = !!existingTeam;
-            }
+            // The access key validation already determined whether this is a create or update
+            const isUpdate = this.keyAlreadyUsed;
 
             const endpoint = isUpdate ? `${API_BASE}/teams/update` : `${API_BASE}/teams`;
             const payload = isUpdate ? {
@@ -1188,43 +1184,50 @@ class FantasyGolfApp {
     async checkExistingTeam() {
         if (!this.validatedKey || !this.selectedTournament) return;
 
-        try {
-            const response = await fetch(`${API_BASE}/teams?tournament_id=${this.selectedTournament}`);
-            if (response.ok) {
-                const teams = await response.json();
-                const existingTeam = teams.find(t =>
-                    t.tournament_id === this.selectedTournament
-                );
-
-                if (existingTeam) {
-                    this.loadExistingTeamForEdit(existingTeam.id);
-                } else {
-                    this.showTeamForm();
-                }
-            }
-        } catch (error) {
-            console.error('Error checking existing team:', error);
-            this.showTeamForm();
+        // If the backend told us exactly which team this key owns, use it directly.
+        if (this.validatedTeamId) {
+            this.loadExistingTeamForEdit(this.validatedTeamId);
+            return;
         }
+
+        this.showTeamForm();
     }
 
     async loadExistingTeamForEdit(teamId) {
         try {
-            const response = await fetch(`${API_BASE}/teams/${teamId}/golfers`);
-            if (response.ok) {
-                const golfers = await response.json();
+            const [teamRes, tournamentGolferRes] = await Promise.all([
+                fetch(`${API_BASE}/teams/${teamId}/golfers`),
+                fetch(`${API_BASE}/golfers/tournament/${this.selectedTournament}`)
+            ]);
 
-                this.selectedGolfers.clear();
-                golfers.forEach(g => {
-                    this.selectedGolfers.set(g.win_probability_group, {
-                        id: g.id,
-                        name: g.name
-                    });
-                });
-
-                this.showTeamForm(true);
-                this.showToast('Editing existing team - you can update your selections', 'info');
+            if (!teamRes.ok) {
+                this.showTeamForm();
+                return;
             }
+
+            const teamGolfers = await teamRes.json();
+            // Build a set of IDs on the team
+            const teamGolferIds = new Set(teamGolfers.map(g => g.id));
+
+            this.selectedGolfers.clear();
+
+            if (tournamentGolferRes.ok) {
+                // Use tournament-specific groups so pre-selections match the rendered radio buttons
+                const allTournamentGolfers = await tournamentGolferRes.json();
+                allTournamentGolfers.forEach(g => {
+                    if (teamGolferIds.has(g.id)) {
+                        this.selectedGolfers.set(g.win_probability_group, { id: g.id, name: g.name });
+                    }
+                });
+            } else {
+                // Fallback: use global groups (may mis-align if tournament groups differ)
+                teamGolfers.forEach(g => {
+                    this.selectedGolfers.set(g.win_probability_group, { id: g.id, name: g.name });
+                });
+            }
+
+            this.showTeamForm(true);
+            this.showToast('Editing existing team - you can update your selections', 'info');
         } catch (error) {
             console.error('Error loading existing team:', error);
             this.showTeamForm();
@@ -1500,9 +1503,14 @@ class FantasyGolfApp {
                 golfersByGroup[g.win_probability_group].push(g);
             });
 
+            // Cross-reference team golfer IDs against the tournament-specific field so we use
+            // the tournament group (not the global group) for pre-selecting the dropdowns.
+            const teamGolferIds = new Set(teamGolfers.map(g => g.id));
             const currentByGroup = {};
-            teamGolfers.forEach(g => {
-                currentByGroup[g.win_probability_group] = g;
+            allGolfers.forEach(g => {
+                if (teamGolferIds.has(g.id)) {
+                    currentByGroup[g.win_probability_group] = g;
+                }
             });
 
             let html = '<div class="team-editor-table"><table><thead><tr><th>Group</th><th>Current Golfer</th><th>Replacement</th></tr></thead><tbody>';

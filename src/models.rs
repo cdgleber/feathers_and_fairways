@@ -49,6 +49,8 @@ pub struct AccessKeyValidationResponse {
     pub valid: bool,
     pub tournament_id: Option<String>,
     pub already_used: bool,
+    /// Team ID associated with this key, populated when already_used is true
+    pub team_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, FromRow)]

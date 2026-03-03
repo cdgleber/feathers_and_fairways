@@ -107,15 +107,37 @@ pub async fn validate_access_key(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     match key {
-        Some(k) => Ok(Json(AccessKeyValidationResponse {
-            valid: true,
-            tournament_id: Some(k.tournament_id),
-            already_used: k.is_used,
-        })),
+        Some(k) => {
+            // When the key is already used, look up the team so the frontend can load it directly
+            let team_id = if k.is_used {
+                #[derive(sqlx::FromRow)]
+                struct TeamIdRow { id: String }
+                sqlx::query_as::<_, TeamIdRow>(
+                    "SELECT id FROM teams WHERE access_key_id = ? AND tournament_id = ?"
+                )
+                .bind(&k.id)
+                .bind(&k.tournament_id)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten()
+                .map(|r| r.id)
+            } else {
+                None
+            };
+
+            Ok(Json(AccessKeyValidationResponse {
+                valid: true,
+                tournament_id: Some(k.tournament_id),
+                already_used: k.is_used,
+                team_id,
+            }))
+        }
         None => Ok(Json(AccessKeyValidationResponse {
             valid: false,
             tournament_id: None,
             already_used: false,
+            team_id: None,
         })),
     }
 }

@@ -1211,8 +1211,8 @@ async fn fetch_espn_competitor(
     let mut rounds = Vec::new();
     for espn_round in &linescores.items {
         let round_period = match espn_round.period {
-            Some(p) => p,
-            None => continue,
+            Some(p) if p >= 1 && p <= 4 => p,
+            _ => continue,
         };
 
         let hole_scores = match &espn_round.linescores {

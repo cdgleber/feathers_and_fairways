@@ -29,9 +29,9 @@ Thumbs.db
 # Database
 *.db
 *.sqlite
+*.db-shm
+*.db-wal
 
 TODO.md
-.db-shm
-.db-wal
 next.txt
 

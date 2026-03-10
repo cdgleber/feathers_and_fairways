@@ -83,28 +83,115 @@
                     <p class="hero-subtitle">Build your dream team and compete for glory</p>
                 </div>
 
-                <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card">
-                        <span class="material-icons stat-icon">groups</span>
-                        <h3 class="stat-value" id="totalTeams">0</h3>
-                        <p class="stat-label">Teams</p>
-                    </div>
-                    <div class="stat-card">
-                        <span class="material-icons stat-icon">sports_golf</span>
-                        <h3 class="stat-value" id="totalGolfers">0</h3>
-                        <p class="stat-label">Golfers</p>
-                    </div>
-                    <div class="stat-card">
-                        <span class="material-icons stat-icon">emoji_events</span>
-                        <h3 class="stat-value" id="activeTournaments">0</h3>
-                        <p class="stat-label">Active Tournaments</p>
+                <!-- How to Join -->
+                <div class="card">
+                    <h3 class="card-title">
+                        <span class="material-icons">sports_golf</span>
+                        How to Join a Tournament
+                    </h3>
+                    <div class="guide-steps">
+                        <div class="guide-step">
+                            <div class="guide-step-number">1</div>
+                            <div class="guide-step-body">
+                                <strong>Get your access key</strong>
+                                <p>Your commissioner will give you a unique access key for the tournament. Keys look like <code>XXXX-XXXX-XXXX</code> and can only be used once.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="guide-step-number">2</div>
+                            <div class="guide-step-body">
+                                <strong>Go to Join League</strong>
+                                <p>Click <strong>Join League</strong> in the navigation bar, then enter your access key and click <em>Validate Key</em>.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="guide-step-number">3</div>
+                            <div class="guide-step-body">
+                                <strong>Enter your name &amp; pick your team</strong>
+                                <p>You'll be shown the golfer field split into 9 groups. Pick <strong>exactly one golfer from each group</strong> for a 9-player team.</p>
+                            </div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="guide-step-number">4</div>
+                            <div class="guide-step-body">
+                                <strong>Submit before the tournament starts</strong>
+                                <p>Teams lock when the tournament begins. Once submitted, check the <strong>Leaderboard</strong> tab to follow your team's fantasy points in real time.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="content-section">
-                    <h3 class="section-title">Current Season</h3>
-                    <div id="currentSeasonInfo" class="info-card">
-                        <p class="loading">Loading season information...</p>
+                <!-- Player Groups -->
+                <div class="card">
+                    <h3 class="card-title">
+                        <span class="material-icons">groups</span>
+                        How Golfer Groups Work
+                    </h3>
+                    <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                        Every golfer in the tournament field is assigned to one of <strong>9 groups</strong> based on their world ranking and win probability for that event.
+                    </p>
+                    <div class="guide-groups-grid">
+                        <div class="guide-group-item guide-group-elite">
+                            <span class="guide-group-badge">1</span>
+                            <div>
+                                <strong>Group 1 — Elite</strong>
+                                <p>Top-ranked favourites. Highest ceiling, most likely to contend.</p>
+                            </div>
+                        </div>
+                        <div class="guide-group-item guide-group-mid">
+                            <span class="guide-group-badge">2 – 5</span>
+                            <div>
+                                <strong>Groups 2–5 — Contenders</strong>
+                                <p>Strong players with a realistic shot at a top finish.</p>
+                            </div>
+                        </div>
+                        <div class="guide-group-item guide-group-long">
+                            <span class="guide-group-badge">6 – 9</span>
+                            <div>
+                                <strong>Groups 6–9 — Long Shots</strong>
+                                <p>Lower-ranked players. Higher risk, but a hot week can make your team.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="margin-top: var(--spacing-md); color: var(--text-secondary); font-size: 14px;">
+                        Because you must pick one golfer per group, every team has the same structural balance — your edge comes from picking the right players within each tier.
+                    </p>
+                </div>
+
+                <!-- Scoring -->
+                <div class="card">
+                    <h3 class="card-title">
+                        <span class="material-icons">calculate</span>
+                        Fantasy Point Scoring
+                    </h3>
+                    <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                        Fantasy points are awarded <strong>per hole</strong> for each golfer on your team, then summed across all four rounds.
+                    </p>
+                    <div class="guide-scoring-table">
+                        <div class="guide-score-row guide-score-eagle">
+                            <span class="guide-score-label">Eagle or better</span>
+                            <span class="guide-score-result guide-score-result-pos">+2 pts</span>
+                            <span class="guide-score-detail">2 or more under par on a hole</span>
+                        </div>
+                        <div class="guide-score-row guide-score-birdie">
+                            <span class="guide-score-label">Birdie</span>
+                            <span class="guide-score-result guide-score-result-pos">+1 pt</span>
+                            <span class="guide-score-detail">1 under par on a hole</span>
+                        </div>
+                        <div class="guide-score-row guide-score-par">
+                            <span class="guide-score-label">Par</span>
+                            <span class="guide-score-result">0 pts</span>
+                            <span class="guide-score-detail">Even on a hole</span>
+                        </div>
+                        <div class="guide-score-row guide-score-bogey">
+                            <span class="guide-score-label">Bogey or worse</span>
+                            <span class="guide-score-result guide-score-result-neg">−1 pt</span>
+                            <span class="guide-score-detail">1 or more over par on a hole</span>
+                        </div>
+                    </div>
+                    <div class="guide-amateur-note">
+                        <span class="material-icons" style="font-size: 18px; flex-shrink: 0;">info</span>
+                        <span><strong>Amateur rule:</strong> Amateur golfers cannot receive negative fantasy points. Bogeys and worse score <strong>0</strong> instead of &minus;1.</span>
                     </div>
                 </div>
             </div>
@@ -112,18 +199,18 @@
             <!-- Join League View -->
             <div id="joinView" class="view">
                 <h2 class="page-title">Join the League</h2>
-                
+
                 <div class="card">
                     <h3 class="card-title">Enter Your Access Key</h3>
                     <form id="validateKeyForm" class="form">
                         <div class="form-group">
                             <label for="accessKey" class="form-label">Access Key</label>
-                            <input 
-                                type="text" 
-                                id="accessKey" 
-                                class="form-input" 
+                            <input
+                                type="text"
+                                id="accessKey"
+                                class="form-input"
                                 placeholder="XXXX-XXXX-XXXX"
-                                maxlength="14"
+                                maxlength="255"
                                 required>
                         </div>
                         <button type="submit" class="btn btn-primary">
@@ -136,54 +223,18 @@
                 <div id="teamBuilderSection" class="card hidden">
                     <!-- Content will be dynamically loaded here -->
                 </div>
-
-                <!-- <div id="teamCreatedSection" class="card hidden success-card">
-                    <div class="success-icon">
-                        <span class="material-icons">check_circle</span>
-                    </div>
-                    <h3>Team Saved Successfully!</h3>
-                    <p id="teamCreatedMessage"></p>
-                    <button class="btn btn-primary" onclick="app.showView('leaderboard')">
-                        View Leaderboard
-                    </button>
-                </div>
-                    <div class="success-icon">
-                        <span class="material-icons">check_circle</span>
-                    </div>
-                    <h3>Team Created Successfully!</h3>
-                    <p id="teamCreatedMessage"></p>
-                    <button class="btn btn-primary" onclick="app.showView('leaderboard')">
-                        View Leaderboard
-                    </button>
-                </div> -->
             </div>
 
             <!-- Leaderboard View -->
             <div id="leaderboardView" class="view">
                 <h2 class="page-title">Leaderboard</h2>
-                
-                <div class="tabs">
-                    <button class="tab active" data-tab="season">Season Standings</button>
-                    <button class="tab" data-tab="tournament">Tournament Scores</button>
+
+                <div class="form-group">
+                    <label for="tournamentSelect" class="form-label">Select Tournament</label>
+                    <select id="tournamentSelect" class="form-input"></select>
                 </div>
-
-                <div class="tab-content">
-                    <div id="seasonTab" class="tab-pane active">
-                        <div class="card">
-                            <div id="seasonLeaderboard" class="leaderboard"></div>
-                        </div>
-                    </div>
-
-                    <div id="tournamentTab" class="tab-pane">
-                        <div class="form-group">
-                            <label for="tournamentSelect" class="form-label">Select Tournament</label>
-                            <select id="tournamentSelect" class="form-input"></select>
-                        </div>
-                        <div class="card">
-                            <div id="tournamentLeaderboard" class="leaderboard"></div>
-                        </div>
-                    </div>
-
+                <div class="card">
+                    <div id="tournamentLeaderboard" class="leaderboard"></div>
                 </div>
             </div>
 
@@ -191,19 +242,11 @@
             <div id="historyView" class="view">
                 <h2 class="page-title">Tournament History</h2>
 
-                <div class="history-selectors">
-                    <div class="form-group">
-                        <label for="historySeasonSelect" class="form-label">Season</label>
-                        <select id="historySeasonSelect" class="form-input">
-                            <option value="">Loading seasons...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="historyTournamentSelect" class="form-label">Tournament</label>
-                        <select id="historyTournamentSelect" class="form-input">
-                            <option value="">Select a tournament</option>
-                        </select>
-                    </div>
+                <div class="form-group">
+                    <label for="historyTournamentSelect" class="form-label">Tournament</label>
+                    <select id="historyTournamentSelect" class="form-input">
+                        <option value="">Loading tournaments...</option>
+                    </select>
                 </div>
 
                 <div id="historyEmptyState" class="card hidden">
@@ -230,7 +273,7 @@
             <!-- Admin View -->
             <div id="adminView" class="view">
                 <h2 class="page-title">Admin Panel</h2>
-                
+
                 <!-- Admin Login Modal -->
                 <div id="adminLoginModal" class="modal">
                     <div class="modal-content">
@@ -244,66 +287,19 @@
                         </form>
                     </div>
                 </div>
-                
+
                 <div id="adminContent" class="hidden">
-                
+
+                <div class="tabs" id="adminTabs">
+                    <button class="tab active" data-admin-tab="management">Management</button>
+                    <button class="tab" data-admin-tab="accessKeys">Access Keys</button>
+                    <button class="tab" data-admin-tab="scoreEditor">Score Editor</button>
+                    <button class="tab" data-admin-tab="teamEditor">Team Editor</button>
+                    <button class="tab" data-admin-tab="import">Import</button>
+                </div>
+
+                <div id="managementTab" class="admin-tab-pane active">
                 <div class="admin-grid">
-                    <!-- Database Stats -->
-                    <div class="card full-width">
-                        <h3 class="card-title">
-                            <span class="material-icons">analytics</span>
-                            Database Statistics
-                        </h3>
-                        <div id="adminStatsContent">
-                            <p class="loading">Loading statistics...</p>
-                        </div>
-                    </div>
-
-                    <!-- Season Management -->
-                    <div class="card">
-                        <h3 class="card-title">
-                            <span class="material-icons">calendar_today</span>
-                            Season Management
-                        </h3>
-                        <form id="createSeasonForm" class="form">
-                            <div class="form-group">
-                                <label for="seasonName" class="form-label">Season Name</label>
-                                <input type="text" id="seasonName" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="seasonYear" class="form-label">Year</label>
-                                <input type="number" id="seasonYear" class="form-input" required>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="seasonStart" class="form-label">Start Date</label>
-                                    <input type="date" id="seasonStart" class="form-input" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="seasonEnd" class="form-label">End Date</label>
-                                    <input type="date" id="seasonEnd" class="form-input" required>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Create Season</button>
-                        </form>
-                    </div>
-
-                    <!-- Access Keys -->
-                    <div class="card">
-                        <h3 class="card-title">
-                            <span class="material-icons">vpn_key</span>
-                            Generate Access Keys
-                        </h3>
-                        <form id="generateKeysForm" class="form">
-                            <div class="form-group">
-                                <label for="keyCount" class="form-label">Number of Keys</label>
-                                <input type="number" id="keyCount" class="form-input" min="1" max="50" value="10" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Generate Keys</button>
-                        </form>
-                        <div id="generatedKeys" class="generated-keys"></div>
-                    </div>
-
                     <!-- Golfer Management -->
                     <div class="card">
                         <h3 class="card-title">
@@ -316,40 +312,45 @@
                                 <input type="text" id="golferName" class="form-input" required>
                             </div>
                             <div class="form-group">
-                                <label for="winGroup" class="form-label">Win Probability Group (1-6)</label>
+                                <label for="winGroup" class="form-label">Win Probability Group (1-9)</label>
                                 <select id="winGroup" class="form-input" required>
                                     <option value="1">Group 1 (Highest)</option>
                                     <option value="2">Group 2</option>
                                     <option value="3">Group 3</option>
                                     <option value="4">Group 4</option>
                                     <option value="5">Group 5</option>
-                                    <option value="6">Group 6 (Lowest)</option>
+                                    <option value="6">Group 6</option>
+                                    <option value="7">Group 7</option>
+                                    <option value="8">Group 8</option>
+                                    <option value="9">Group 9 (Lowest)</option>
                                 </select>
                             </div>
                             <button type="submit" class="btn btn-primary">Add Golfer</button>
                         </form>
                     </div>
 
-                    <!-- Golfer Upload -->
+                    <!-- Paste Golfers -->
                     <div class="card">
                         <h3 class="card-title">
-                            <span class="material-icons">upload_file</span>
-                            Upload Golfers (JSON)
+                            <span class="material-icons">content_paste</span>
+                            Paste Golfer Names
                         </h3>
                         <div class="form">
                             <div class="form-group">
-                                <label for="golferFileInput" class="form-label">Golfer File (.json)</label>
-                                <input type="file" id="golferFileInput" class="form-input" accept=".json">
+                                <label for="pasteGolferNames" class="form-label">Golfer Names (one per line)</label>
+                                <textarea id="pasteGolferNames" class="form-input" rows="8" placeholder="Tiger Woods&#10;Rory McIlroy&#10;Scottie Scheffler&#10;..."></textarea>
                             </div>
-                            <div id="golferPreview" class="hidden">
-                                <h4 class="card-title">Preview</h4>
-                                <div id="golferPreviewContent"></div>
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="pasteGolferAmateur">
+                                    <span>Mark all as amateurs</span>
+                                </label>
                             </div>
-                            <button class="btn btn-primary" id="uploadGolfersBtn" disabled onclick="app.uploadGolfers()">
-                                <span class="material-icons">cloud_upload</span>
-                                Upload Golfers
+                            <button class="btn btn-primary" onclick="app.pasteGolfers()">
+                                <span class="material-icons">content_paste</span>
+                                Import Names
                             </button>
-                            <div id="golferUploadResult" class="hidden"></div>
+                            <div id="pasteGolferResult" class="hidden" style="margin-top: var(--spacing-md);"></div>
                         </div>
                     </div>
 
@@ -367,75 +368,249 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="tournamentStart" class="form-label">Start Date</label>
-                                    <input type="date" id="tournamentStart" class="form-input" required>
+                                    <input type="date" placeholder="date" id="tournamentStart" class="form-input" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="tournamentEnd" class="form-label">End Date</label>
-                                    <input type="date" id="tournamentEnd" class="form-input" required>
+                                    <input type="date" placeholder="date" id="tournamentEnd" class="form-input" required>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary">Create Tournament</button>
                         </form>
                     </div>
 
-                    <!-- Score Upload -->
+                    <!-- ESPN Field Fetch -->
                     <div class="card full-width">
                         <h3 class="card-title">
-                            <span class="material-icons">upload_file</span>
-                            Upload Scores (JSON)
+                            <span class="material-icons">download</span>
+                            Fetch ESPN Field &amp; Set Groups
                         </h3>
+                        <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                            Pull the tournament field from ESPN, auto-assign golfers to 9 groups by world ranking, then adjust before saving.
+                        </p>
                         <div class="form">
-                            <div class="form-group">
-                                <label for="scoreUploadTournament" class="form-label">Tournament</label>
-                                <select id="scoreUploadTournament" class="form-input">
-                                    <option value="">Select a tournament</option>
-                                </select>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="fieldTournamentSelect" class="form-label">Tournament</label>
+                                    <select id="fieldTournamentSelect" class="form-input">
+                                        <option value="">Select a tournament</option>
+                                    </select>
+                                    <div id="fieldStatus" style="margin-top: var(--spacing-xs); font-size: 0.85em; min-height: 1.4em;"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="fieldEspnId" class="form-label">ESPN Tournament ID</label>
+                                    <div style="display: flex; gap: var(--spacing-sm); align-items: flex-start;">
+                                        <input type="text" id="fieldEspnId" class="form-input" placeholder="e.g. 401811932" style="flex: 1;">
+                                        <button class="btn btn-primary" onclick="app.fetchEspnField()">
+                                            <span class="material-icons">download</span>
+                                            Fetch Field
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="scoreFileInput" class="form-label">Score File (.json)</label>
-                                <input type="file" id="scoreFileInput" class="form-input" accept=".json">
-                            </div>
-                            <div id="scorePreview" class="hidden">
-                                <h4 class="card-title">Preview</h4>
-                                <div id="scorePreviewContent"></div>
-                            </div>
-                            <button class="btn btn-primary" id="uploadScoresBtn" disabled onclick="app.uploadScores()">
-                                <span class="material-icons">cloud_upload</span>
-                                Upload Scores
-                            </button>
-                            <div id="scoreUploadResult" class="hidden"></div>
                         </div>
-                    </div>
 
-                    <!-- Tournament Golfer Groups -->
-                    <div class="card full-width">
-                        <h3 class="card-title">
-                            <span class="material-icons">swap_vert</span>
-                            Tournament Golfer Groups
-                        </h3>
-                        <div class="form">
-                            <div class="form-group">
-                                <label for="groupUploadTournament" class="form-label">Tournament</label>
-                                <select id="groupUploadTournament" class="form-input">
-                                    <option value="">Select a tournament</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="groupFileInput" class="form-label">Groups File (.json)</label>
-                                <input type="file" id="groupFileInput" class="form-input" accept=".json">
-                            </div>
-                            <div id="groupPreview" class="hidden">
-                                <h4 class="card-title">Preview</h4>
-                                <div id="groupPreviewContent"></div>
-                            </div>
-                            <button class="btn btn-primary" id="uploadGroupsBtn" disabled onclick="app.uploadTournamentGroups()">
-                                <span class="material-icons">cloud_upload</span>
-                                Upload Groups
+                        <div id="espnFieldPreview" class="hidden" style="margin-top: var(--spacing-md);">
+                            <h4 style="margin-bottom: var(--spacing-sm);">Group Assignments — drag rows or change dropdowns to adjust, then save.</h4>
+                            <div id="espnFieldGroups"></div>
+                            <button class="btn btn-primary" style="margin-top: var(--spacing-md);" onclick="app.saveGroupAssignments()">
+                                <span class="material-icons">save</span>
+                                Save Group Assignments
                             </button>
-                            <div id="groupUploadResult" class="hidden"></div>
+                            <div id="saveGroupsResult" class="hidden" style="margin-top: var(--spacing-sm);"></div>
                         </div>
                     </div>
                 </div>
+                </div> <!-- Close managementTab -->
+
+                <div id="accessKeysTab" class="admin-tab-pane">
+                <div class="admin-grid">
+                    <!-- Generate Access Keys -->
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">vpn_key</span>
+                            Generate Access Keys
+                        </h3>
+                        <form id="generateKeysForm" class="form">
+                            <div class="form-group">
+                                <label for="keyTournamentSelect" class="form-label">Tournament</label>
+                                <select id="keyTournamentSelect" class="form-input" required>
+                                    <option value="">Select a tournament</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="keyCount" class="form-label">Number of Keys</label>
+                                <input type="number" id="keyCount" class="form-input" min="1" max="50" value="10" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Generate Keys</button>
+                        </form>
+                        <div id="generatedKeys" class="generated-keys"></div>
+                    </div>
+
+                    <!-- All Access Keys Table -->
+                    <div class="card full-width">
+                        <h3 class="card-title">
+                            <span class="material-icons">list</span>
+                            All Access Keys
+                        </h3>
+                        <div id="accessKeysTableContent">
+                            <p class="loading">Loading keys...</p>
+                        </div>
+                    </div>
+                </div>
+                </div> <!-- Close accessKeysTab -->
+
+                <div id="scoreEditorTab" class="admin-tab-pane">
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">edit_note</span>
+                            Score Editor
+                        </h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="scoreEditorTournament" class="form-label">Tournament</label>
+                                <select id="scoreEditorTournament" class="form-input">
+                                    <option value="">Select a tournament</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="scoreEditorGolfer" class="form-label">Golfer</label>
+                                <select id="scoreEditorGolfer" class="form-input" disabled>
+                                    <option value="">Select a golfer</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="scoreEditorTable"></div>
+                    </div>
+                </div>
+
+                <div id="teamEditorTab" class="admin-tab-pane">
+                    <div class="card">
+                        <h3 class="card-title">
+                            <span class="material-icons">group</span>
+                            Team Editor
+                        </h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="teamEditorTournament" class="form-label">Tournament</label>
+                                <select id="teamEditorTournament" class="form-input">
+                                    <option value="">Select a tournament</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="teamEditorTeam" class="form-label">Team</label>
+                                <select id="teamEditorTeam" class="form-input" disabled>
+                                    <option value="">Select a team</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="teamEditorContent"></div>
+                    </div>
+                </div>
+
+                <div id="importTab" class="admin-tab-pane">
+                    <div class="card full-width">
+                        <h3 class="card-title">
+                            <span class="material-icons">file_upload</span>
+                            Import Tournament Scores
+                        </h3>
+                        <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                            Import scores from an ESPN tournament ID or upload a <code>tournament.json</code> file from get-golf-scores.
+                        </p>
+                        <div class="form">
+                            <div class="form-group">
+                                <label for="espnTournamentId" class="form-label">ESPN Tournament ID</label>
+                                <div style="display: flex; gap: var(--spacing-sm); align-items: flex-start;">
+                                    <input type="text" id="espnTournamentId" class="form-input" placeholder="e.g. 401811932" style="flex: 1; max-width: 300px;">
+                                    <button class="btn btn-primary" id="espnFetchBtn" onclick="app.fetchEspnTournament()">
+                                        <span class="material-icons">cloud_download</span>
+                                        Fetch from ESPN
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: var(--spacing-md); margin: var(--spacing-md) 0; color: var(--text-secondary);">
+                                <hr style="flex: 1; border-color: var(--border-color);">
+                                <span>OR</span>
+                                <hr style="flex: 1; border-color: var(--border-color);">
+                            </div>
+                            <div class="form-group">
+                                <label for="importFileInput" class="form-label">Tournament File (.json)</label>
+                                <input type="file" id="importFileInput" class="form-input" accept=".json">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="importPreviewSection" class="hidden">
+                        <div class="card full-width">
+                            <h3 class="card-title">
+                                <span class="material-icons">preview</span>
+                                Import Preview: <span id="importTournamentName"></span>
+                            </h3>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="importTournamentSelect" class="form-label">Target Tournament</label>
+                                    <select id="importTournamentSelect" class="form-input">
+                                        <option value="">Select a tournament</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="importMatchedSection">
+                                <h4 style="margin: var(--spacing-md) 0 var(--spacing-sm); color: var(--success);">
+                                    <span class="material-icons" style="vertical-align: middle; font-size: 18px;">check_circle</span>
+                                    Matched Golfers (<span id="importMatchedCount">0</span>)
+                                </h4>
+                                <div id="importMatchedList" class="leaderboard"></div>
+                            </div>
+
+                            <div id="importUnmatchedSection">
+                                <h4 style="margin: var(--spacing-md) 0 var(--spacing-sm); color: var(--warning, #f59e0b);">
+                                    <span class="material-icons" style="vertical-align: middle; font-size: 18px;">warning</span>
+                                    Unmatched Golfers (<span id="importUnmatchedCount">0</span>)
+                                </h4>
+                                <div id="importUnmatchedList"></div>
+                            </div>
+
+                            <button class="btn btn-primary" id="importCommitBtn" disabled onclick="app.commitImport()" style="margin-top: var(--spacing-md);">
+                                <span class="material-icons">cloud_upload</span>
+                                Import Scores
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="importResultSection" class="hidden">
+                        <div class="card full-width">
+                            <div id="importResultContent"></div>
+                        </div>
+                    </div>
+
+                    <div class="card full-width" style="margin-top: var(--spacing-md);">
+                        <h3 class="card-title">
+                            <span class="material-icons">refresh</span>
+                            Refresh ESPN Scores
+                        </h3>
+                        <p style="margin-bottom: var(--spacing-md); color: var(--text-secondary);">
+                            Refresh scores for a tournament that was previously imported via ESPN.
+                        </p>
+                        <div class="form-group">
+                            <label for="refreshTournamentSelect" class="form-label">Tournament</label>
+                            <div style="display: flex; gap: var(--spacing-sm); align-items: flex-start;">
+                                <select id="refreshTournamentSelect" class="form-input" style="flex: 1; max-width: 400px;">
+                                    <option value="">Loading tournaments...</option>
+                                </select>
+                                <button class="btn btn-primary" id="refreshScoresBtn" onclick="app.refreshScores()" disabled>
+                                    <span class="material-icons">refresh</span>
+                                    Refresh Scores
+                                </button>
+                            </div>
+                        </div>
+                        <div id="refreshResultSection" class="hidden" style="margin-top: var(--spacing-md);">
+                            <div id="refreshResultContent"></div>
+                        </div>
+                    </div>
+                </div>
+
                 </div> <!-- Close adminContent -->
             </div>
         </div>
@@ -447,6 +622,19 @@
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay hidden">
         <div class="spinner"></div>
+    </div>
+
+    <!-- Golfer Scorecard Overlay -->
+    <div id="scorecardOverlay" class="scorecard-overlay hidden">
+        <div class="scorecard-card">
+            <div class="scorecard-header">
+                <h3 id="scorecardGolferName" class="scorecard-title"></h3>
+                <button id="scorecardClose" class="scorecard-close-btn" aria-label="Close scorecard">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="scorecard-table-wrap" id="scorecardTableWrap"></div>
+        </div>
     </div>
 
     <script src="/js/app.js"></script>

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -14,78 +14,13 @@ fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-fn calculate_fantasy_points(score_to_par: i32) -> i32 {
+fn calculate_fantasy_points(score_to_par: i32, is_amateur: bool) -> i32 {
     match score_to_par {
         s if s <= -2 => 2,  // Eagle or better
         -1 => 1,            // Birdie
         0 => 0,             // Par
-        _ => -1,            // Bogey or worse
+        _ => if is_amateur { 0 } else { -1 },  // Bogey or worse (amateurs get 0)
     }
-}
-
-// Season routes
-pub async fn create_season(
-    State(pool): State<SqlitePool>,
-    Json(payload): Json<CreateSeasonRequest>,
-) -> Result<(StatusCode, Json<Season>), (StatusCode, Json<ApiError>)> {
-    payload.validate()
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
-
-    // Deactivate all other seasons
-    sqlx::query("UPDATE seasons SET is_active = 0")
-        .execute(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    let id = new_id();
-    sqlx::query(
-        "INSERT INTO seasons (id, name, year, start_date, end_date, is_active) VALUES (?, ?, ?, ?, ?, 1)"
-    )
-    .bind(&id)
-    .bind(&payload.name)
-    .bind(payload.year)
-    .bind(&payload.start_date)
-    .bind(&payload.end_date)
-    .execute(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    let season = sqlx::query_as::<_, Season>(
-        "SELECT id, name, year, start_date, end_date, is_active, created_at FROM seasons WHERE id = ?"
-    )
-    .bind(&id)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    Ok((StatusCode::CREATED, Json(season)))
-}
-
-pub async fn list_seasons(
-    State(pool): State<SqlitePool>,
-) -> Result<Json<Vec<Season>>, (StatusCode, Json<ApiError>)> {
-    let seasons = sqlx::query_as::<_, Season>(
-        "SELECT id, name, year, start_date, end_date, is_active, created_at FROM seasons ORDER BY year DESC"
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    Ok(Json(seasons))
-}
-
-pub async fn get_active_season(
-    State(pool): State<SqlitePool>,
-) -> Result<Json<Season>, (StatusCode, Json<ApiError>)> {
-    let season = sqlx::query_as::<_, Season>(
-        "SELECT id, name, year, start_date, end_date, is_active, created_at FROM seasons WHERE is_active = 1"
-    )
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
-    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("No active season found"))))?;
-
-    Ok(Json(season))
 }
 
 // Access key routes
@@ -100,6 +35,17 @@ pub async fn create_access_keys(
         ));
     }
 
+    // Verify tournament exists
+    let exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM tournaments WHERE id = ?")
+        .bind(&payload.tournament_id)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    if exists == 0 {
+        return Err((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))));
+    }
+
     let mut keys = Vec::new();
 
     for _ in 0..payload.count {
@@ -107,17 +53,17 @@ pub async fn create_access_keys(
         let key_code = generate_access_key();
 
         sqlx::query(
-            "INSERT INTO access_keys (id, key_code, season_id) VALUES (?, ?, ?)"
+            "INSERT INTO access_keys (id, key_code, tournament_id) VALUES (?, ?, ?)"
         )
         .bind(&id)
         .bind(&key_code)
-        .bind(&payload.season_id)
+        .bind(&payload.tournament_id)
         .execute(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
         let access_key = sqlx::query_as::<_, AccessKey>(
-            "SELECT id, key_code, season_id, player_name, is_used, used_at, created_at FROM access_keys WHERE id = ?"
+            "SELECT id, key_code, tournament_id, player_name, is_used, used_at, created_at FROM access_keys WHERE id = ?"
         )
         .bind(&id)
         .fetch_one(&pool)
@@ -130,12 +76,30 @@ pub async fn create_access_keys(
     Ok((StatusCode::CREATED, Json(keys)))
 }
 
+pub async fn list_access_keys(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<Vec<AccessKeyDetail>>, (StatusCode, Json<ApiError>)> {
+    let keys = sqlx::query_as::<_, AccessKeyDetail>(
+        "SELECT ak.id, ak.key_code, ak.is_used, ak.created_at, \
+         t.name as tournament_name, te.player_name as team_name \
+         FROM access_keys ak \
+         JOIN tournaments t ON ak.tournament_id = t.id \
+         LEFT JOIN teams te ON te.access_key_id = ak.id \
+         ORDER BY ak.created_at DESC"
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(keys))
+}
+
 pub async fn validate_access_key(
     State(pool): State<SqlitePool>,
     Json(payload): Json<ValidateAccessKeyRequest>,
 ) -> Result<Json<AccessKeyValidationResponse>, (StatusCode, Json<ApiError>)> {
     let key = sqlx::query_as::<_, AccessKey>(
-        "SELECT id, key_code, season_id, player_name, is_used, used_at, created_at FROM access_keys WHERE key_code = ?"
+        "SELECT id, key_code, tournament_id, player_name, is_used, used_at, created_at FROM access_keys WHERE key_code = ?"
     )
     .bind(&payload.key_code)
     .fetch_optional(&pool)
@@ -143,15 +107,37 @@ pub async fn validate_access_key(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     match key {
-        Some(k) => Ok(Json(AccessKeyValidationResponse {
-            valid: true,
-            season_id: Some(k.season_id),
-            already_used: k.is_used,
-        })),
+        Some(k) => {
+            // When the key is already used, look up the team so the frontend can load it directly
+            let team_id = if k.is_used {
+                #[derive(sqlx::FromRow)]
+                struct TeamIdRow { id: String }
+                sqlx::query_as::<_, TeamIdRow>(
+                    "SELECT id FROM teams WHERE access_key_id = ? AND tournament_id = ?"
+                )
+                .bind(&k.id)
+                .bind(&k.tournament_id)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten()
+                .map(|r| r.id)
+            } else {
+                None
+            };
+
+            Ok(Json(AccessKeyValidationResponse {
+                valid: true,
+                tournament_id: Some(k.tournament_id),
+                already_used: k.is_used,
+                team_id,
+            }))
+        }
         None => Ok(Json(AccessKeyValidationResponse {
             valid: false,
-            season_id: None,
+            tournament_id: None,
             already_used: false,
+            team_id: None,
         })),
     }
 }
@@ -165,18 +151,20 @@ pub async fn create_golfer(
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
 
     let id = new_id();
+    let is_amateur = payload.is_amateur.unwrap_or(false);
     sqlx::query(
-        "INSERT INTO golfers (id, name, win_probability_group) VALUES (?, ?, ?)"
+        "INSERT INTO golfers (id, name, win_probability_group, is_amateur) VALUES (?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&payload.name)
     .bind(payload.win_probability_group)
+    .bind(is_amateur)
     .execute(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     let golfer = sqlx::query_as::<_, Golfer>(
-        "SELECT id, name, win_probability_group, is_active, created_at FROM golfers WHERE id = ?"
+        "SELECT id, name, win_probability_group, is_amateur, is_active, espn_id, created_at FROM golfers WHERE id = ?"
     )
     .bind(&id)
     .fetch_one(&pool)
@@ -190,7 +178,7 @@ pub async fn list_golfers(
     State(pool): State<SqlitePool>,
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT id, name, win_probability_group, is_active, created_at FROM golfers WHERE is_active = 1 ORDER BY win_probability_group, name"
+        "SELECT id, name, win_probability_group, is_amateur, is_active, espn_id, created_at FROM golfers WHERE is_active = 1 ORDER BY win_probability_group, name"
     )
     .fetch_all(&pool)
     .await
@@ -205,12 +193,12 @@ pub async fn list_golfers_for_tournament(
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
         "SELECT g.id, g.name, \
-         COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-         g.is_active, g.created_at \
+         tgg.win_probability_group, \
+         g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
-         LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+         JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
          WHERE g.is_active = 1 \
-         ORDER BY win_probability_group, name"
+         ORDER BY tgg.win_probability_group, g.name"
     )
     .bind(&tournament_id)
     .fetch_all(&pool)
@@ -218,6 +206,65 @@ pub async fn list_golfers_for_tournament(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     Ok(Json(golfers))
+}
+
+// Paste golfers from a list of names
+pub async fn paste_golfers(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<PasteGolfersRequest>,
+) -> Result<Json<PasteGolfersResponse>, (StatusCode, Json<ApiError>)> {
+    let is_amateur = payload.is_amateur.unwrap_or(false);
+    let mut results = Vec::new();
+    let mut errors = Vec::new();
+
+    for raw_name in &payload.names {
+        let name = raw_name.trim();
+        if name.is_empty() {
+            continue;
+        }
+
+        #[derive(sqlx::FromRow)]
+        struct ExistsRow { id: String }
+
+        let existing = sqlx::query_as::<_, ExistsRow>(
+            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
+        )
+        .bind(name)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        if let Some(row) = existing {
+            results.push(PasteGolferResult {
+                name: name.to_string(),
+                id: row.id,
+                created: false,
+            });
+        } else {
+            let id = new_id();
+            match sqlx::query(
+                "INSERT INTO golfers (id, name, win_probability_group, is_amateur) VALUES (?, ?, 5, ?)"
+            )
+            .bind(&id)
+            .bind(name)
+            .bind(is_amateur)
+            .execute(&pool)
+            .await {
+                Ok(_) => {
+                    results.push(PasteGolferResult {
+                        name: name.to_string(),
+                        id,
+                        created: true,
+                    });
+                }
+                Err(e) => {
+                    errors.push(format!("{}: {}", name, e));
+                }
+            }
+        }
+    }
+
+    Ok(Json(PasteGolfersResponse { results, errors }))
 }
 
 // Team routes
@@ -230,7 +277,7 @@ pub async fn create_team(
 
     // Validate access key
     let access_key = sqlx::query_as::<_, AccessKey>(
-        "SELECT id, key_code, season_id, player_name, is_used, used_at, created_at FROM access_keys WHERE key_code = ?"
+        "SELECT id, key_code, tournament_id, player_name, is_used, used_at, created_at FROM access_keys WHERE key_code = ?"
     )
     .bind(&payload.key_code)
     .fetch_optional(&pool)
@@ -251,10 +298,10 @@ pub async fn create_team(
     for golfer_id in &payload.golfer_ids {
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
-             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_active, g.created_at \
+             tgg.win_probability_group, \
+             g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
-             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
         )
         .bind(&payload.tournament_id)
@@ -272,10 +319,10 @@ pub async fn create_team(
         }
     }
 
-    if groups_used.len() != 6 {
+    if groups_used.len() != 9 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new("Must select exactly one golfer from each of the 6 groups")),
+            Json(ApiError::new("Must select exactly one golfer from each of the 9 groups")),
         ));
     }
 
@@ -286,10 +333,9 @@ pub async fn create_team(
     // Create team
     let team_id = new_id();
     sqlx::query(
-        "INSERT INTO teams (id, season_id, tournament_id, player_name, access_key_id, email) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO teams (id, tournament_id, player_name, access_key_id, email) VALUES (?, ?, ?, ?, ?)"
     )
     .bind(&team_id)
-    .bind(&access_key.season_id)
     .bind(&payload.tournament_id)
     .bind(&payload.player_name)
     .bind(&access_key.id)
@@ -327,7 +373,7 @@ pub async fn create_team(
 
     // Fetch the created team
     let team = sqlx::query_as::<_, Team>(
-        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE id = ?"
+        "SELECT id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE id = ?"
     )
     .bind(&team_id)
     .fetch_one(&pool)
@@ -336,7 +382,7 @@ pub async fn create_team(
 
     // Fetch team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -350,14 +396,20 @@ pub async fn create_team(
     Ok((StatusCode::CREATED, Json(TeamWithGolfers { team, golfers })))
 }
 
-pub async fn list_teams(
+// List teams by tournament_id query param (public)
+pub async fn list_teams_by_tournament(
     State(pool): State<SqlitePool>,
-    Path(season_id): Path<String>,
+    Query(params): Query<TournamentIdQuery>,
 ) -> Result<Json<Vec<Team>>, (StatusCode, Json<ApiError>)> {
+    let tournament_id = params.tournament_id.ok_or((
+        StatusCode::BAD_REQUEST,
+        Json(ApiError::new("tournament_id query parameter is required")),
+    ))?;
+
     let teams = sqlx::query_as::<_, Team>(
-        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE season_id = ? ORDER BY player_name"
+        "SELECT id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE tournament_id = ? ORDER BY player_name"
     )
-    .bind(&season_id)
+    .bind(&tournament_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
@@ -370,7 +422,7 @@ pub async fn get_team_golfers(
     Path(team_id): Path<String>,
 ) -> Result<Json<Vec<Golfer>>, (StatusCode, Json<ApiError>)> {
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -392,18 +444,17 @@ pub async fn create_tournament(
     payload.validate()
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
 
-    sqlx::query("UPDATE tournaments SET is_active = 0 WHERE season_id = ?")
-        .bind(&payload.season_id)
+    // Deactivate all other tournaments globally
+    sqlx::query("UPDATE tournaments SET is_active = 0")
         .execute(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     let id = new_id();
     sqlx::query(
-        "INSERT INTO tournaments (id, season_id, name, start_date, end_date, is_active) VALUES (?, ?, ?, ?, ?, 1)"
+        "INSERT INTO tournaments (id, name, start_date, end_date, is_active) VALUES (?, ?, ?, ?, 1)"
     )
     .bind(&id)
-    .bind(&payload.season_id)
     .bind(&payload.name)
     .bind(&payload.start_date)
     .bind(&payload.end_date)
@@ -412,7 +463,7 @@ pub async fn create_tournament(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     let tournament = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+        "SELECT id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
     )
     .bind(&id)
     .fetch_one(&pool)
@@ -422,14 +473,27 @@ pub async fn create_tournament(
     Ok((StatusCode::CREATED, Json(tournament)))
 }
 
-pub async fn list_tournaments(
+pub async fn list_all_tournaments(
     State(pool): State<SqlitePool>,
-    Path(season_id): Path<String>,
 ) -> Result<Json<Vec<Tournament>>, (StatusCode, Json<ApiError>)> {
     let tournaments = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE season_id = ? ORDER BY start_date DESC"
+        "SELECT id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments ORDER BY start_date DESC"
     )
-    .bind(&season_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(tournaments))
+}
+
+pub async fn list_completed_tournaments(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<Vec<CompletedTournament>>, (StatusCode, Json<ApiError>)> {
+    let tournaments = sqlx::query_as::<_, CompletedTournament>(
+        "SELECT id, name, start_date, end_date FROM tournaments \
+         WHERE end_date < date('now') \
+         ORDER BY start_date DESC"
+    )
     .fetch_all(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
@@ -450,7 +514,18 @@ pub async fn add_hole_scores(
         score_input.validate()
             .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
 
-        let fantasy_points = calculate_fantasy_points(score_input.score_to_par);
+        #[derive(sqlx::FromRow)]
+        struct AmateurRow { is_amateur: bool }
+        let golfer_row = sqlx::query_as::<_, AmateurRow>(
+            "SELECT is_amateur FROM golfers WHERE id = ?"
+        )
+        .bind(&score_input.golfer_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+        .ok_or((StatusCode::BAD_REQUEST, Json(ApiError::new("Golfer not found"))))?;
+
+        let fantasy_points = calculate_fantasy_points(score_input.score_to_par, golfer_row.is_amateur);
         let id = new_id();
 
         sqlx::query(
@@ -506,94 +581,6 @@ pub async fn get_tournament_scores(
     Ok(Json(scores))
 }
 
-pub async fn get_season_leaderboard(
-    State(pool): State<SqlitePool>,
-    Path(season_id): Path<String>,
-) -> Result<Json<Vec<LeaderboardEntry>>, (StatusCode, Json<ApiError>)> {
-    let leaderboard = sqlx::query_as::<_, LeaderboardEntry>(
-        "SELECT \
-            t.player_name, \
-            t.id as team_id, \
-            COALESCE(SUM(hs.fantasy_points), 0) as total_points \
-         FROM teams t \
-         LEFT JOIN team_golfers tg ON t.id = tg.team_id \
-         LEFT JOIN hole_scores hs ON tg.golfer_id = hs.golfer_id \
-         LEFT JOIN tournaments tour ON hs.tournament_id = tour.id AND tour.season_id = ? \
-         WHERE t.season_id = ? \
-         GROUP BY t.id, t.player_name \
-         ORDER BY total_points DESC"
-    )
-    .bind(&season_id)
-    .bind(&season_id)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    Ok(Json(leaderboard))
-}
-
-pub async fn get_season_leaderboard_with_golfers(
-    State(pool): State<SqlitePool>,
-    Path(season_id): Path<String>,
-) -> Result<Json<Vec<LeaderboardEntryWithGolfers>>, (StatusCode, Json<ApiError>)> {
-    // Get leaderboard entries
-    let leaderboard = sqlx::query_as::<_, LeaderboardEntry>(
-        "SELECT \
-            t.player_name, \
-            t.id as team_id, \
-            COALESCE(SUM(hs.fantasy_points), 0) as total_points \
-         FROM teams t \
-         LEFT JOIN team_golfers tg ON t.id = tg.team_id \
-         LEFT JOIN hole_scores hs ON tg.golfer_id = hs.golfer_id \
-         LEFT JOIN tournaments tour ON hs.tournament_id = tour.id AND tour.season_id = ? \
-         WHERE t.season_id = ? \
-         GROUP BY t.id, t.player_name \
-         ORDER BY total_points DESC"
-    )
-    .bind(&season_id)
-    .bind(&season_id)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    // Batch-fetch all team golfers for this season
-    let team_golfers = sqlx::query_as::<_, TeamGolferRow>(
-        "SELECT tg.team_id, g.id, g.name, g.win_probability_group \
-         FROM team_golfers tg \
-         INNER JOIN golfers g ON tg.golfer_id = g.id \
-         INNER JOIN teams t ON tg.team_id = t.id \
-         WHERE t.season_id = ? \
-         ORDER BY g.win_probability_group"
-    )
-    .bind(&season_id)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    // Group golfers by team_id
-    let mut golfers_by_team: std::collections::HashMap<String, Vec<GolferSummary>> = std::collections::HashMap::new();
-    for row in team_golfers {
-        golfers_by_team.entry(row.team_id).or_default().push(GolferSummary {
-            id: row.id,
-            name: row.name,
-            win_probability_group: row.win_probability_group,
-        });
-    }
-
-    // Combine leaderboard entries with golfers
-    let result: Vec<LeaderboardEntryWithGolfers> = leaderboard
-        .into_iter()
-        .map(|entry| LeaderboardEntryWithGolfers {
-            player_name: entry.player_name,
-            team_id: entry.team_id.clone(),
-            total_points: entry.total_points.unwrap_or(0),
-            golfers: golfers_by_team.remove(&entry.team_id).unwrap_or_default(),
-        })
-        .collect();
-
-    Ok(Json(result))
-}
-
 pub async fn get_tournament_leaderboard(
     State(pool): State<SqlitePool>,
     Path(tournament_id): Path<String>,
@@ -604,172 +591,19 @@ pub async fn get_tournament_leaderboard(
             g.id as golfer_id, \
             COALESCE(SUM(hs.fantasy_points), 0) as total_points \
          FROM golfers g \
+         INNER JOIN team_golfers tg ON tg.golfer_id = g.id \
+         INNER JOIN teams t ON tg.team_id = t.id AND t.tournament_id = ? \
          LEFT JOIN hole_scores hs ON g.id = hs.golfer_id AND hs.tournament_id = ? \
          GROUP BY g.id, g.name \
-         HAVING COALESCE(SUM(hs.fantasy_points), 0) > 0 \
          ORDER BY total_points DESC"
     )
+    .bind(&tournament_id)
     .bind(&tournament_id)
     .fetch_all(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     Ok(Json(leaderboard))
-}
-
-// Upload golfers from JSON
-pub async fn upload_golfers(
-    State(pool): State<SqlitePool>,
-    Json(payload): Json<GolferUploadRequest>,
-) -> Result<Json<GolferUploadResponse>, (StatusCode, Json<ApiError>)> {
-    if payload.golfers.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiError::new("golfers array is empty")),
-        ));
-    }
-
-    let mut total_created: usize = 0;
-    let mut total_updated: usize = 0;
-    let mut errors: Vec<String> = Vec::new();
-
-    for entry in &payload.golfers {
-        if entry.group < 1 || entry.group > 6 {
-            errors.push(format!("{}: group must be between 1 and 6", entry.name));
-            continue;
-        }
-
-        if entry.name.trim().is_empty() {
-            errors.push("Empty golfer name".to_string());
-            continue;
-        }
-
-        // Check if golfer already exists
-        #[derive(sqlx::FromRow)]
-        struct ExistsRow {
-            id: String,
-        }
-
-        let existing = sqlx::query_as::<_, ExistsRow>(
-            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
-        )
-        .bind(entry.name.trim())
-        .fetch_optional(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-        if let Some(row) = existing {
-            // Update existing golfer (avoids case-sensitivity mismatch with ON CONFLICT)
-            sqlx::query(
-                "UPDATE golfers SET win_probability_group = ?, is_active = 1 WHERE id = ?"
-            )
-            .bind(entry.group)
-            .bind(&row.id)
-            .execute(&pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-            total_updated += 1;
-        } else {
-            // Insert new golfer
-            let id = new_id();
-            sqlx::query(
-                "INSERT INTO golfers (id, name, win_probability_group) VALUES (?, ?, ?)"
-            )
-            .bind(&id)
-            .bind(entry.name.trim())
-            .bind(entry.group)
-            .execute(&pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-            total_created += 1;
-        }
-    }
-
-    Ok(Json(GolferUploadResponse {
-        total_created,
-        total_updated,
-        errors,
-    }))
-}
-
-// Upload tournament-specific golfer groups
-pub async fn upload_tournament_golfer_groups(
-    State(pool): State<SqlitePool>,
-    Path(tournament_id): Path<String>,
-    Json(payload): Json<TournamentGolferGroupUploadRequest>,
-) -> Result<Json<TournamentGolferGroupUploadResponse>, (StatusCode, Json<ApiError>)> {
-    // Verify tournament exists
-    let _tournament = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
-    )
-    .bind(&tournament_id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
-    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
-
-    if payload.groups.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiError::new("groups array is empty")),
-        ));
-    }
-
-    let mut total_processed: usize = 0;
-    let mut errors: Vec<String> = Vec::new();
-
-    for entry in &payload.groups {
-        if entry.group < 1 || entry.group > 6 {
-            errors.push(format!("{}: group must be between 1 and 6", entry.golfer));
-            continue;
-        }
-
-        // Look up golfer by name (case-insensitive)
-        #[derive(sqlx::FromRow)]
-        struct GolferIdRow {
-            id: String,
-        }
-
-        let golfer = sqlx::query_as::<_, GolferIdRow>(
-            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
-        )
-        .bind(&entry.golfer)
-        .fetch_optional(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-        let golfer_id = match golfer {
-            Some(g) => g.id,
-            None => {
-                errors.push(format!("{}: golfer not found", entry.golfer));
-                continue;
-            }
-        };
-
-        let id = new_id();
-        sqlx::query(
-            "INSERT INTO tournament_golfer_groups (id, tournament_id, golfer_id, win_probability_group) \
-             VALUES (?, ?, ?, ?) \
-             ON CONFLICT(tournament_id, golfer_id) \
-             DO UPDATE SET win_probability_group = excluded.win_probability_group"
-        )
-        .bind(&id)
-        .bind(&tournament_id)
-        .bind(&golfer_id)
-        .bind(entry.group)
-        .execute(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-        total_processed += 1;
-    }
-
-    Ok(Json(TournamentGolferGroupUploadResponse {
-        total_processed,
-        errors,
-    }))
 }
 
 // Admin authentication
@@ -804,7 +638,7 @@ pub async fn update_team(
 
     // Validate access key
     let access_key = sqlx::query_as::<_, AccessKey>(
-        "SELECT id, key_code, season_id, player_name, is_used, used_at, created_at FROM access_keys WHERE key_code = ?"
+        "SELECT id, key_code, tournament_id, player_name, is_used, used_at, created_at FROM access_keys WHERE key_code = ?"
     )
     .bind(&payload.key_code)
     .fetch_optional(&pool)
@@ -847,7 +681,7 @@ pub async fn update_team(
 
     // Find existing team
     let team = sqlx::query_as::<_, Team>(
-        "SELECT id, season_id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE access_key_id = ? AND tournament_id = ?"
+        "SELECT id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE access_key_id = ? AND tournament_id = ?"
     )
     .bind(&access_key.id)
     .bind(&payload.tournament_id)
@@ -862,10 +696,10 @@ pub async fn update_team(
     for golfer_id in &payload.golfer_ids {
         let golfer = sqlx::query_as::<_, Golfer>(
             "SELECT g.id, g.name, \
-             COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
-             g.is_active, g.created_at \
+             tgg.win_probability_group, \
+             g.is_amateur, g.is_active, g.espn_id, g.created_at \
              FROM golfers g \
-             LEFT JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
              WHERE g.id = ?"
         )
         .bind(&payload.tournament_id)
@@ -883,10 +717,10 @@ pub async fn update_team(
         }
     }
 
-    if groups_used.len() != 6 {
+    if groups_used.len() != 9 {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiError::new("Must select exactly one golfer from each of the 6 groups")),
+            Json(ApiError::new("Must select exactly one golfer from each of the 9 groups")),
         ));
     }
 
@@ -918,7 +752,7 @@ pub async fn update_team(
 
     // Fetch updated team golfers
     let golfers = sqlx::query_as::<_, Golfer>(
-        "SELECT g.id, g.name, g.win_probability_group, g.is_active, g.created_at \
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
          FROM golfers g \
          INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
          WHERE tg.team_id = ? \
@@ -932,102 +766,114 @@ pub async fn update_team(
     Ok(Json(TeamWithGolfers { team, golfers }))
 }
 
-// Upload tournament scores from JSON
-pub async fn upload_tournament_scores(
+// List teams for a tournament (admin)
+pub async fn list_teams_for_tournament(
     State(pool): State<SqlitePool>,
     Path(tournament_id): Path<String>,
-    Json(payload): Json<ScoreUploadRequest>,
-) -> Result<Json<ScoreUploadResponse>, (StatusCode, Json<ApiError>)> {
-    // Validate pars array
-    if payload.pars.len() != 18 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ApiError::new("pars array must have exactly 18 elements")),
-        ));
-    }
-
-    // Verify tournament exists
-    let _tournament = sqlx::query_as::<_, Tournament>(
-        "SELECT id, season_id, name, start_date, end_date, is_active, created_at FROM tournaments WHERE id = ?"
+) -> Result<Json<Vec<Team>>, (StatusCode, Json<ApiError>)> {
+    let teams = sqlx::query_as::<_, Team>(
+        "SELECT id, tournament_id, player_name, access_key_id, email, created_at \
+         FROM teams WHERE tournament_id = ? ORDER BY player_name"
     )
     .bind(&tournament_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(teams))
+}
+
+// Admin update team golfers (bypasses start-date check)
+pub async fn admin_update_team_golfers(
+    State(pool): State<SqlitePool>,
+    Path(team_id): Path<String>,
+    Json(payload): Json<AdminUpdateTeamGolfersRequest>,
+) -> Result<Json<TeamWithGolfers>, (StatusCode, Json<ApiError>)> {
+    payload.validate()
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiError::new(e.to_string()))))?;
+
+    // Validate team exists
+    let team = sqlx::query_as::<_, Team>(
+        "SELECT id, tournament_id, player_name, access_key_id, email, created_at FROM teams WHERE id = ?"
+    )
+    .bind(&team_id)
     .fetch_optional(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
-    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Team not found"))))?;
 
-    let mut total_processed: usize = 0;
-    let mut errors: Vec<String> = Vec::new();
+    // Verify golfer selection (one from each group, using tournament-specific groups)
+    let mut groups_used = std::collections::HashSet::new();
 
-    for entry in &payload.scores {
-        // Validate holes array
-        if entry.holes.len() != 18 {
-            errors.push(format!("{}: holes array must have exactly 18 elements", entry.golfer));
-            continue;
-        }
-
-        // Validate day
-        if entry.day < 1 || entry.day > 4 {
-            errors.push(format!("{}: day must be between 1 and 4", entry.golfer));
-            continue;
-        }
-
-        // Look up golfer by name (case-insensitive)
-        #[derive(sqlx::FromRow)]
-        struct GolferIdRow {
-            id: String,
-        }
-
-        let golfer = sqlx::query_as::<_, GolferIdRow>(
-            "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
+    for golfer_id in &payload.golfer_ids {
+        let golfer = sqlx::query_as::<_, Golfer>(
+            "SELECT g.id, g.name, \
+             tgg.win_probability_group, \
+             g.is_amateur, g.is_active, g.espn_id, g.created_at \
+             FROM golfers g \
+             JOIN tournament_golfer_groups tgg ON g.id = tgg.golfer_id AND tgg.tournament_id = ? \
+             WHERE g.id = ?"
         )
-        .bind(&entry.golfer)
+        .bind(&payload.tournament_id)
+        .bind(golfer_id)
         .fetch_optional(&pool)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+        .ok_or((StatusCode::BAD_REQUEST, Json(ApiError::new("Invalid golfer ID"))))?;
 
-        let golfer_id = match golfer {
-            Some(g) => g.id,
-            None => {
-                errors.push(format!("{}: golfer not found", entry.golfer));
-                continue;
-            }
-        };
-
-        // Insert scores for each hole
-        for (hole_index, &strokes) in entry.holes.iter().enumerate() {
-            let hole_num = (hole_index + 1) as i32;
-            let par = payload.pars[hole_index];
-            let score_to_par = strokes - par;
-            let fantasy_points = calculate_fantasy_points(score_to_par);
-            let id = new_id();
-
-            sqlx::query(
-                "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
-                 ON CONFLICT (tournament_id, golfer_id, day, hole) \
-                 DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
-            )
-            .bind(&id)
-            .bind(&tournament_id)
-            .bind(&golfer_id)
-            .bind(entry.day)
-            .bind(hole_num)
-            .bind(strokes)
-            .bind(score_to_par)
-            .bind(fantasy_points)
-            .execute(&pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-            total_processed += 1;
+        if !groups_used.insert(golfer.win_probability_group) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new("Cannot select multiple golfers from the same group")),
+            ));
         }
     }
 
-    Ok(Json(ScoreUploadResponse {
-        total_scores_processed: total_processed,
-        errors,
-    }))
+    if groups_used.len() != 9 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::new("Must select exactly one golfer from each of the 9 groups")),
+        ));
+    }
+
+    // Transaction: delete old, insert new
+    let mut tx = pool.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    sqlx::query("DELETE FROM team_golfers WHERE team_id = ?")
+        .bind(&team_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    for golfer_id in &payload.golfer_ids {
+        let tg_id = new_id();
+        sqlx::query("INSERT INTO team_golfers (id, team_id, golfer_id) VALUES (?, ?, ?)")
+            .bind(&tg_id)
+            .bind(&team_id)
+            .bind(golfer_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+    }
+
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    // Fetch updated team golfers
+    let golfers = sqlx::query_as::<_, Golfer>(
+        "SELECT g.id, g.name, g.win_probability_group, g.is_amateur, g.is_active, g.espn_id, g.created_at \
+         FROM golfers g \
+         INNER JOIN team_golfers tg ON g.id = tg.golfer_id \
+         WHERE tg.team_id = ? \
+         ORDER BY g.win_probability_group"
+    )
+    .bind(&team_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(TeamWithGolfers { team, golfers }))
 }
 
 // Admin stats
@@ -1036,10 +882,6 @@ pub async fn get_admin_stats(
 ) -> Result<Json<AdminStats>, (StatusCode, Json<ApiError>)> {
     #[derive(sqlx::FromRow)]
     struct CountRow { count: i64 }
-
-    let total_seasons = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM seasons")
-        .fetch_one(&pool).await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     let total_tournaments = sqlx::query_as::<_, CountRow>("SELECT COUNT(*) as count FROM tournaments")
         .fetch_one(&pool).await
@@ -1089,17 +931,6 @@ pub async fn get_admin_stats(
         bogeys_or_worse: bogeys.count,
     };
 
-    // Season breakdown
-    let season_breakdown = sqlx::query_as::<_, SeasonBreakdown>(
-        "SELECT s.name as season_name, s.year as season_year, \
-         (SELECT COUNT(*) FROM tournaments t WHERE t.season_id = s.id) as tournament_count, \
-         (SELECT COUNT(*) FROM teams tm WHERE tm.season_id = s.id) as team_count, \
-         (SELECT COUNT(*) FROM hole_scores hs INNER JOIN tournaments t ON hs.tournament_id = t.id WHERE t.season_id = s.id) as score_count \
-         FROM seasons s ORDER BY s.year DESC"
-    )
-    .fetch_all(&pool).await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
     // Popular golfers (top 10 most selected)
     let popular_golfers = sqlx::query_as::<_, PopularGolfer>(
         "SELECT g.name as golfer_name, COUNT(tg.id) as times_selected \
@@ -1113,7 +944,6 @@ pub async fn get_admin_stats(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
 
     Ok(Json(AdminStats {
-        total_seasons: total_seasons.count,
         total_tournaments: total_tournaments.count,
         total_teams: total_teams.count,
         total_golfers: total_golfers.count,
@@ -1122,27 +952,8 @@ pub async fn get_admin_stats(
         access_keys_used: keys_used.count,
         access_keys_unused: keys_total.count - keys_used.count,
         score_distribution,
-        season_breakdown,
         popular_golfers,
     }))
-}
-
-// Completed tournaments for a season
-pub async fn get_completed_tournaments(
-    State(pool): State<SqlitePool>,
-    Path(season_id): Path<String>,
-) -> Result<Json<Vec<CompletedTournament>>, (StatusCode, Json<ApiError>)> {
-    let tournaments = sqlx::query_as::<_, CompletedTournament>(
-        "SELECT id, name, start_date, end_date FROM tournaments \
-         WHERE season_id = ? AND end_date < date('now') \
-         ORDER BY start_date DESC"
-    )
-    .bind(&season_id)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
-
-    Ok(Json(tournaments))
 }
 
 // Team leaderboard for a specific tournament
@@ -1170,7 +981,7 @@ pub async fn get_tournament_team_leaderboard(
 
     // Batch-fetch all team golfers for this tournament
     let team_golfers = sqlx::query_as::<_, TeamGolferRow>(
-        "SELECT tg.team_id, g.id, g.name, g.win_probability_group \
+        "SELECT tg.team_id, g.id, g.name, g.win_probability_group, g.is_amateur \
          FROM team_golfers tg \
          INNER JOIN golfers g ON tg.golfer_id = g.id \
          INNER JOIN teams t ON tg.team_id = t.id \
@@ -1188,6 +999,7 @@ pub async fn get_tournament_team_leaderboard(
             id: row.id,
             name: row.name,
             win_probability_group: row.win_probability_group,
+            is_amateur: row.is_amateur,
         });
     }
 
@@ -1263,5 +1075,817 @@ pub async fn get_tournament_stats(
         bogeys_or_worse: stats.bogeys_or_worse,
         best_round_golfer: best_round.as_ref().map(|r| r.golfer_name.clone()),
         best_round_points: best_round.map(|r| r.round_points),
+    }))
+}
+
+// Tournament Import - Preview
+struct PlayerForPreview {
+    name: String,
+    slug: String,
+    rounds_available: Vec<i32>,
+}
+
+async fn build_import_preview(
+    pool: &SqlitePool,
+    tournament_name: String,
+    players: Vec<PlayerForPreview>,
+) -> Result<ImportPreviewResponse, (StatusCode, Json<ApiError>)> {
+    let mut matched = Vec::new();
+    let mut unmatched = Vec::new();
+
+    for player in &players {
+        // Extract last name (text before first space, e.g. "McIlroy" from "McIlroy R.")
+        let last_name = player.name.split_whitespace().next().unwrap_or(&player.name);
+
+        #[derive(sqlx::FromRow)]
+        struct GolferMatchRow {
+            id: String,
+            name: String,
+            is_amateur: bool,
+        }
+
+        let candidates = sqlx::query_as::<_, GolferMatchRow>(
+            "SELECT id, name, is_amateur FROM golfers WHERE LOWER(name) LIKE '%' || LOWER(?) || '%' AND is_active = 1"
+        )
+        .bind(last_name)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        if candidates.len() == 1 {
+            matched.push(ImportMatchedGolfer {
+                json_name: player.name.clone(),
+                slug: player.slug.clone(),
+                golfer_id: candidates[0].id.clone(),
+                golfer_name: candidates[0].name.clone(),
+                is_amateur: candidates[0].is_amateur,
+                rounds_available: player.rounds_available.clone(),
+            });
+        } else {
+            unmatched.push(ImportUnmatchedGolfer {
+                json_name: player.name.clone(),
+                slug: player.slug.clone(),
+                candidates: candidates.iter().map(|c| ImportGolferCandidate {
+                    golfer_id: c.id.clone(),
+                    golfer_name: c.name.clone(),
+                }).collect(),
+                rounds_available: player.rounds_available.clone(),
+            });
+        }
+    }
+
+    Ok(ImportPreviewResponse {
+        tournament_name,
+        matched,
+        unmatched,
+    })
+}
+
+pub async fn import_preview(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<ImportTournamentJson>,
+) -> Result<Json<ImportPreviewResponse>, (StatusCode, Json<ApiError>)> {
+    let players: Vec<PlayerForPreview> = payload.players.iter().map(|p| PlayerForPreview {
+        name: p.name.clone(),
+        slug: p.slug.clone(),
+        rounds_available: p.rounds.iter().map(|r| r.round_number).collect(),
+    }).collect();
+
+    let preview = build_import_preview(&pool, payload.tournament.name.clone(), players).await?;
+    Ok(Json(preview))
+}
+
+async fn fetch_espn_competitor(
+    client: &reqwest::Client,
+    competitor_url: &str,
+) -> Result<EspnPlayerData, String> {
+    // Fetch the competitor object (contains $ref links to athlete, linescores, etc.)
+    let competitor: EspnCompetitor = client.get(competitor_url).send().await
+        .map_err(|e| format!("competitor fetch: {}", e))?
+        .json().await
+        .map_err(|e| format!("competitor parse: {}", e))?;
+
+    // Fetch athlete info
+    let athlete_ref = competitor.athlete
+        .ok_or_else(|| "no athlete ref".to_string())?;
+    let athlete: EspnAthlete = client.get(&athlete_ref.href).send().await
+        .map_err(|e| format!("athlete fetch: {}", e))?
+        .json().await
+        .map_err(|e| format!("athlete parse: {}", e))?;
+
+    let espn_athlete_id = athlete.id.clone();
+
+    let display_name = athlete.display_name
+        .or(athlete.short_name)
+        .unwrap_or_else(|| {
+            format!("{} {}",
+                athlete.first_name.as_deref().unwrap_or(""),
+                athlete.last_name.as_deref().unwrap_or("")
+            ).trim().to_string()
+        });
+
+    // Build a slug from the name (lowercase, spaces to hyphens)
+    let slug = display_name.to_lowercase().replace(' ', "-");
+
+    // Fetch linescores
+    let linescores_ref = match competitor.linescores {
+        Some(r) => r,
+        None => return Ok(EspnPlayerData { display_name, slug, espn_athlete_id, rounds: vec![] }),
+    };
+
+    let linescores_response = client.get(&linescores_ref.href).send().await
+        .map_err(|e| format!("linescores fetch: {}", e))?;
+    let linescores_text = linescores_response.text().await
+        .map_err(|e| format!("linescores read: {}", e))?;
+
+    let linescores: EspnLinescores = match serde_json::from_str(&linescores_text) {
+        Ok(ls) => ls,
+        Err(e) => {
+            let truncated = if linescores_text.len() > 200 { &linescores_text[..200] } else { &linescores_text };
+            tracing::warn!("ESPN: linescores parse failed for {}: {} — body: {}", display_name, e, truncated);
+            return Ok(EspnPlayerData { display_name, slug, espn_athlete_id, rounds: vec![] });
+        }
+    };
+
+    // Transform ESPN rounds into ImportRound format
+    let mut rounds = Vec::new();
+    for espn_round in &linescores.items {
+        let round_period = match espn_round.period {
+            Some(p) if p >= 1 && p <= 4 => p,
+            _ => continue,
+        };
+
+        let hole_scores = match &espn_round.linescores {
+            Some(ls) => ls,
+            None => continue,
+        };
+
+        // Skip rounds with no valid hole data
+        if hole_scores.is_empty() {
+            continue;
+        }
+
+        let holes: Vec<ImportHole> = hole_scores.iter()
+            .filter_map(|h| {
+                let par = h.par.map(|v| v as i32)?;
+                let score = h.value.map(|v| v as i32)?;
+                let hole_num = h.period?;
+                Some(ImportHole {
+                    hole: hole_num,
+                    par,
+                    score,
+                })
+            })
+            .collect();
+
+        if !holes.is_empty() {
+            rounds.push(ImportRound {
+                round_number: round_period,
+                holes,
+            });
+        }
+    }
+
+    Ok(EspnPlayerData { display_name, slug, espn_athlete_id, rounds })
+}
+
+// Fetch ESPN field for a tournament and auto-assign groups
+pub async fn fetch_espn_field(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+    Json(payload): Json<EspnImportRequest>,
+) -> Result<Json<EspnFieldPreviewResponse>, (StatusCode, Json<ApiError>)> {
+    let espn_id = &payload.espn_tournament_id;
+    let client = reqwest::Client::new();
+
+    // Fetch all competitor pages (no linescores needed, just athlete info)
+    let mut all_competitor_refs: Vec<String> = Vec::new();
+    let mut page = 1;
+    loop {
+        let comp_url = format!(
+            "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/{}/competitions/{}/competitors?lang=en&region=us&page={}",
+            espn_id, espn_id, page
+        );
+        let comp_page: EspnCompetitorPage = client.get(&comp_url).send().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN request failed: {}", e)))))?
+            .json().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN parse error: {}", e)))))?;
+
+        for item in &comp_page.items {
+            all_competitor_refs.push(item.href.clone());
+        }
+
+        if page >= comp_page.page_count {
+            break;
+        }
+        page += 1;
+    }
+
+    tracing::info!("ESPN field: Found {} competitors for event {}", all_competitor_refs.len(), espn_id);
+
+    // Fetch athlete info for each competitor concurrently (no linescores)
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(10));
+    let client = std::sync::Arc::new(client);
+    let mut handles = Vec::new();
+
+    for (orig_idx, comp_ref) in all_competitor_refs.into_iter().enumerate() {
+        let sem = semaphore.clone();
+        let client = client.clone();
+        let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            // Fetch competitor to get athlete ref + world rank, then fetch athlete
+            let result: Result<(String, Option<String>, Option<i64>, usize), String> = async {
+                let competitor: EspnCompetitor = client.get(&comp_ref).send().await
+                    .map_err(|e| format!("competitor fetch: {}", e))?
+                    .json().await
+                    .map_err(|e| format!("competitor parse: {}", e))?;
+
+                let world_rank = competitor.sort_order;
+
+                let athlete_ref = competitor.athlete
+                    .ok_or_else(|| "no athlete ref".to_string())?;
+                let athlete: EspnAthlete = client.get(&athlete_ref.href).send().await
+                    .map_err(|e| format!("athlete fetch: {}", e))?
+                    .json().await
+                    .map_err(|e| format!("athlete parse: {}", e))?;
+
+                let espn_id = athlete.id.clone();
+                let name = athlete.display_name
+                    .or(athlete.short_name)
+                    .unwrap_or_else(|| {
+                        format!("{} {}",
+                            athlete.first_name.as_deref().unwrap_or(""),
+                            athlete.last_name.as_deref().unwrap_or("")
+                        ).trim().to_string()
+                    });
+                Ok((name, espn_id, world_rank, orig_idx))
+            }.await;
+            result
+        });
+        handles.push(handle);
+    }
+
+    // Collect field; sort afterward so ordering is deterministic
+    let mut field: Vec<(String, Option<String>, Option<i64>, usize)> = Vec::new();
+    for handle in handles {
+        match handle.await {
+            Ok(Ok(data)) => field.push(data),
+            Ok(Err(e)) => tracing::warn!("ESPN field: Failed to fetch competitor: {}", e),
+            Err(e) => tracing::warn!("ESPN field: Task join error: {}", e),
+        }
+    }
+
+    let total = field.len();
+    if total == 0 {
+        return Err((StatusCode::BAD_GATEWAY, Json(ApiError::new("No competitors found in ESPN field"))));
+    }
+
+    // Sort by world ranking ascending (best = lowest number = Group 1).
+    // ESPN's sortOrder is the OWGR-based seeding value for PGA events.
+    // Fall back to original ESPN page order when sortOrder is absent.
+    let has_rankings = field.iter().any(|(_, _, rank, _)| rank.is_some());
+    field.sort_by(|a, b| match (&a.2, &b.2) {
+        (Some(ra), Some(rb)) => ra.cmp(rb),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.3.cmp(&b.3),
+    });
+
+    // Determine the ranking range so groups are evenly spaced across it.
+    // Group 1 covers the best-ranked players; Group 9 the worst.
+    // Groups may have different sizes; similar-ranked players land in the same group.
+    let (min_rank, max_rank) = if has_rankings {
+        let min = field.iter().filter_map(|(_, _, r, _)| *r).min().unwrap_or(1);
+        let max = field.iter().filter_map(|(_, _, r, _)| *r).max().unwrap_or(1);
+        (min, max)
+    } else {
+        (0_i64, (total as i64).saturating_sub(1).max(0))
+    };
+    let rank_range = (max_rank - min_rank).max(1);
+
+    let mut groups: Vec<EspnFieldGroup> = (1..=9).map(|g| EspnFieldGroup { group: g, golfers: Vec::new() }).collect();
+
+    for (idx, (name, espn_athlete_id, world_rank, _)) in field.into_iter().enumerate() {
+        // Use the actual world rank when available; otherwise use position in sorted list.
+        let rank_value = if has_rankings {
+            world_rank.unwrap_or(max_rank + 1) // unranked → placed just past worst ranked → group 9
+        } else {
+            idx as i64
+        };
+        let rank_offset = (rank_value - min_rank).max(0);
+        let group_idx = ((rank_offset as f64 / (rank_range + 1) as f64) * 9.0).floor() as usize;
+        let group_idx = group_idx.min(8); // 0-based, max 8
+
+        // Upsert golfer: find by ESPN ID or name, create if not found
+        #[derive(sqlx::FromRow)]
+        struct GolferRow { id: String }
+
+        let existing = if let Some(ref eid) = espn_athlete_id {
+            sqlx::query_as::<_, GolferRow>("SELECT id FROM golfers WHERE espn_id = ?")
+                .bind(eid)
+                .fetch_optional(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+        } else {
+            None
+        };
+
+        let (golfer_id, created) = if let Some(row) = existing {
+            (row.id, false)
+        } else {
+            // Try to find by name
+            let by_name = sqlx::query_as::<_, GolferRow>(
+                "SELECT id FROM golfers WHERE LOWER(name) = LOWER(?)"
+            )
+            .bind(&name)
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+            if let Some(row) = by_name {
+                // Update ESPN ID if we have one
+                if let Some(ref eid) = espn_athlete_id {
+                    sqlx::query("UPDATE golfers SET espn_id = ? WHERE id = ? AND espn_id IS NULL")
+                        .bind(eid)
+                        .bind(&row.id)
+                        .execute(&pool)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+                }
+                (row.id, false)
+            } else {
+                // Create new golfer
+                let id = new_id();
+                sqlx::query(
+                    "INSERT INTO golfers (id, name, win_probability_group, is_amateur, espn_id) VALUES (?, ?, ?, 0, ?)"
+                )
+                .bind(&id)
+                .bind(&name)
+                .bind((group_idx as i32) + 1)
+                .bind(&espn_athlete_id)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+                (id, true)
+            }
+        };
+
+        groups[group_idx].golfers.push(EspnFieldGolfer {
+            golfer_id,
+            name,
+            espn_id: espn_athlete_id,
+            created,
+        });
+    }
+
+    // Save ESPN tournament ID on tournament record
+    sqlx::query("UPDATE tournaments SET espn_tournament_id = ? WHERE id = ?")
+        .bind(espn_id)
+        .bind(&tournament_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    Ok(Json(EspnFieldPreviewResponse { groups }))
+}
+
+// Save admin-adjusted tournament group assignments
+pub async fn save_tournament_groups(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+    Json(payload): Json<SaveGroupsRequest>,
+) -> Result<Json<SaveGroupsResponse>, (StatusCode, Json<ApiError>)> {
+    let mut total_processed = 0;
+
+    for assignment in &payload.assignments {
+        if assignment.group < 1 || assignment.group > 9 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new(format!("Group must be between 1 and 9, got {}", assignment.group))),
+            ));
+        }
+
+        let id = new_id();
+        sqlx::query(
+            "INSERT INTO tournament_golfer_groups (id, tournament_id, golfer_id, win_probability_group) \
+             VALUES (?, ?, ?, ?) \
+             ON CONFLICT(tournament_id, golfer_id) \
+             DO UPDATE SET win_probability_group = excluded.win_probability_group"
+        )
+        .bind(&id)
+        .bind(&tournament_id)
+        .bind(&assignment.golfer_id)
+        .bind(assignment.group)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        total_processed += 1;
+    }
+
+    Ok(Json(SaveGroupsResponse { total_processed }))
+}
+
+pub async fn import_espn_preview(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<EspnImportRequest>,
+) -> Result<Json<EspnImportPreviewResponse>, (StatusCode, Json<ApiError>)> {
+    let espn_id = &payload.espn_tournament_id;
+    let client = reqwest::Client::new();
+
+    // Fetch tournament event info
+    let event_url = format!(
+        "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/{}?lang=en&region=us",
+        espn_id
+    );
+    let event: EspnEvent = client.get(&event_url).send().await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN request failed: {}", e)))))?
+        .json().await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN parse error: {}", e)))))?;
+
+    // Fetch all competitor pages
+    let mut all_competitor_refs: Vec<String> = Vec::new();
+    let mut page = 1;
+    loop {
+        let comp_url = format!(
+            "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/{}/competitions/{}/competitors?lang=en&region=us&page={}",
+            espn_id, espn_id, page
+        );
+        let comp_page: EspnCompetitorPage = client.get(&comp_url).send().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN request failed: {}", e)))))?
+            .json().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN parse error: {}", e)))))?;
+
+        for item in &comp_page.items {
+            all_competitor_refs.push(item.href.clone());
+        }
+
+        if page >= comp_page.page_count {
+            break;
+        }
+        page += 1;
+    }
+
+    tracing::info!("ESPN: Found {} competitors for event {}", all_competitor_refs.len(), espn_id);
+
+    // Fetch each competitor's details concurrently with semaphore
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(10));
+    let client = std::sync::Arc::new(client);
+    let mut handles = Vec::new();
+
+    for comp_ref in all_competitor_refs {
+        let sem = semaphore.clone();
+        let client = client.clone();
+        let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            fetch_espn_competitor(&client, &comp_ref).await
+        });
+        handles.push(handle);
+    }
+
+    let mut players_for_preview: Vec<PlayerForPreview> = Vec::new();
+    let mut import_players: Vec<ImportPlayer> = Vec::new();
+
+    for handle in handles {
+        match handle.await {
+            Ok(Ok(data)) => {
+                players_for_preview.push(PlayerForPreview {
+                    name: data.display_name.clone(),
+                    slug: data.slug.clone(),
+                    rounds_available: data.rounds.iter().map(|r| r.round_number).collect(),
+                });
+                import_players.push(ImportPlayer {
+                    name: data.display_name,
+                    slug: data.slug,
+                    espn_athlete_id: data.espn_athlete_id,
+                    rounds: data.rounds,
+                });
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("ESPN: Failed to fetch competitor: {}", e);
+            }
+            Err(e) => {
+                tracing::warn!("ESPN: Task join error: {}", e);
+            }
+        }
+    }
+
+    let preview = build_import_preview(&pool, event.name.clone(), players_for_preview).await?;
+
+    Ok(Json(EspnImportPreviewResponse {
+        tournament_name: preview.tournament_name,
+        matched: preview.matched,
+        unmatched: preview.unmatched,
+        players: import_players,
+    }))
+}
+
+// Tournament Import - Commit
+pub async fn import_commit(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<ImportCommitRequest>,
+) -> Result<Json<ImportCommitResponse>, (StatusCode, Json<ApiError>)> {
+    // Verify tournament exists
+    let _tournament = sqlx::query_as::<_, Tournament>(
+        "SELECT id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
+    )
+    .bind(&payload.tournament_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+
+    // Store ESPN tournament ID if provided
+    if let Some(ref espn_tid) = payload.espn_tournament_id {
+        sqlx::query("UPDATE tournaments SET espn_tournament_id = ? WHERE id = ?")
+            .bind(espn_tid)
+            .bind(&payload.tournament_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+    }
+
+    let mut total_processed: usize = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    // Process new golfers first: create them in DB, then import their scores
+    for new_golfer in &payload.new_golfers {
+        if new_golfer.win_probability_group < 1 || new_golfer.win_probability_group > 9 {
+            errors.push(format!("{}: group must be between 1 and 9", new_golfer.name));
+            continue;
+        }
+
+        let golfer_id = new_id();
+        sqlx::query(
+            "INSERT INTO golfers (id, name, win_probability_group, is_amateur, espn_id) VALUES (?, ?, ?, ?, ?)"
+        )
+        .bind(&golfer_id)
+        .bind(&new_golfer.name)
+        .bind(new_golfer.win_probability_group)
+        .bind(new_golfer.is_amateur)
+        .bind(&new_golfer.espn_athlete_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+        // Import their rounds
+        for round in &new_golfer.rounds {
+            if round.round_number < 1 || round.round_number > 4 {
+                errors.push(format!("New golfer {}: round_number {} out of range", new_golfer.name, round.round_number));
+                continue;
+            }
+
+            for hole in &round.holes {
+                let score_to_par = hole.strokes - hole.par;
+                let fantasy_points = calculate_fantasy_points(score_to_par, new_golfer.is_amateur);
+                let id = new_id();
+
+                sqlx::query(
+                    "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT (tournament_id, golfer_id, day, hole) \
+                     DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
+                )
+                .bind(&id)
+                .bind(&payload.tournament_id)
+                .bind(&golfer_id)
+                .bind(round.round_number)
+                .bind(hole.hole)
+                .bind(hole.strokes)
+                .bind(score_to_par)
+                .bind(fantasy_points)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+                total_processed += 1;
+            }
+        }
+    }
+
+    for player_score in &payload.player_scores {
+        // Store ESPN athlete ID on golfer if provided and not already set
+        if let Some(ref espn_aid) = player_score.espn_athlete_id {
+            sqlx::query("UPDATE golfers SET espn_id = ? WHERE id = ? AND espn_id IS NULL")
+                .bind(espn_aid)
+                .bind(&player_score.golfer_id)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+        }
+
+        // Look up golfer's amateur status
+        #[derive(sqlx::FromRow)]
+        struct AmateurRow { is_amateur: bool }
+
+        let golfer_row = match sqlx::query_as::<_, AmateurRow>(
+            "SELECT is_amateur FROM golfers WHERE id = ?"
+        )
+        .bind(&player_score.golfer_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))? {
+            Some(row) => row,
+            None => {
+                errors.push(format!("Golfer {} not found", player_score.golfer_id));
+                continue;
+            }
+        };
+
+        for round in &player_score.rounds {
+            if round.round_number < 1 || round.round_number > 4 {
+                errors.push(format!("Golfer {}: round_number {} out of range", player_score.golfer_id, round.round_number));
+                continue;
+            }
+
+            for hole in &round.holes {
+                let score_to_par = hole.strokes - hole.par;
+                let fantasy_points = calculate_fantasy_points(score_to_par, golfer_row.is_amateur);
+                let id = new_id();
+
+                sqlx::query(
+                    "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT (tournament_id, golfer_id, day, hole) \
+                     DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
+                )
+                .bind(&id)
+                .bind(&payload.tournament_id)
+                .bind(&player_score.golfer_id)
+                .bind(round.round_number)
+                .bind(hole.hole)
+                .bind(hole.strokes)
+                .bind(score_to_par)
+                .bind(fantasy_points)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+                total_processed += 1;
+            }
+        }
+    }
+
+    Ok(Json(ImportCommitResponse {
+        total_scores_processed: total_processed,
+        errors,
+    }))
+}
+
+// Refresh scores from ESPN for a tournament
+pub async fn refresh_scores(
+    State(pool): State<SqlitePool>,
+    Path(tournament_id): Path<String>,
+) -> Result<Json<RefreshScoresResponse>, (StatusCode, Json<ApiError>)> {
+    // Look up tournament and get espn_tournament_id
+    let tournament = sqlx::query_as::<_, Tournament>(
+        "SELECT id, name, start_date, end_date, is_active, espn_tournament_id, created_at FROM tournaments WHERE id = ?"
+    )
+    .bind(&tournament_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Tournament not found"))))?;
+
+    let espn_id = tournament.espn_tournament_id
+        .ok_or((StatusCode::BAD_REQUEST, Json(ApiError::new("Tournament has no ESPN tournament ID. Import via ESPN first."))))?;
+
+    // Load all golfers with espn_id into a HashMap<espn_id, (golfer_id, is_amateur)>
+    #[derive(sqlx::FromRow)]
+    struct GolferEspnRow {
+        id: String,
+        espn_id: String,
+        is_amateur: bool,
+    }
+
+    let golfer_rows = sqlx::query_as::<_, GolferEspnRow>(
+        "SELECT id, espn_id, is_amateur FROM golfers WHERE espn_id IS NOT NULL"
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let golfer_map: std::collections::HashMap<String, (String, bool)> = golfer_rows
+        .into_iter()
+        .map(|r| (r.espn_id, (r.id, r.is_amateur)))
+        .collect();
+
+    // Fetch ESPN competitors (same pagination as import_espn_preview)
+    let client = reqwest::Client::new();
+    let mut all_competitor_refs: Vec<String> = Vec::new();
+    let mut page = 1;
+    loop {
+        let comp_url = format!(
+            "https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/{}/competitions/{}/competitors?lang=en&region=us&page={}",
+            espn_id, espn_id, page
+        );
+        let comp_page: EspnCompetitorPage = client.get(&comp_url).send().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN request failed: {}", e)))))?
+            .json().await
+            .map_err(|e| (StatusCode::BAD_GATEWAY, Json(ApiError::new(format!("ESPN parse error: {}", e)))))?;
+
+        for item in &comp_page.items {
+            all_competitor_refs.push(item.href.clone());
+        }
+
+        if page >= comp_page.page_count {
+            break;
+        }
+        page += 1;
+    }
+
+    tracing::info!("ESPN refresh: Found {} competitors for event {}", all_competitor_refs.len(), espn_id);
+
+    // Fetch each competitor concurrently
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(10));
+    let client = std::sync::Arc::new(client);
+    let mut handles = Vec::new();
+
+    for comp_ref in all_competitor_refs {
+        let sem = semaphore.clone();
+        let client = client.clone();
+        let handle = tokio::spawn(async move {
+            let _permit = sem.acquire().await.unwrap();
+            fetch_espn_competitor(&client, &comp_ref).await
+        });
+        handles.push(handle);
+    }
+
+    let mut total_processed: usize = 0;
+    let mut golfers_updated: usize = 0;
+    let mut golfers_skipped: usize = 0;
+    let mut errors: Vec<String> = Vec::new();
+
+    for handle in handles {
+        let data = match handle.await {
+            Ok(Ok(data)) => data,
+            Ok(Err(e)) => {
+                errors.push(format!("ESPN fetch error: {}", e));
+                continue;
+            }
+            Err(e) => {
+                errors.push(format!("Task join error: {}", e));
+                continue;
+            }
+        };
+
+        // Match by ESPN athlete ID
+        let espn_athlete_id = match &data.espn_athlete_id {
+            Some(id) => id,
+            None => {
+                golfers_skipped += 1;
+                continue;
+            }
+        };
+
+        let (golfer_id, is_amateur) = match golfer_map.get(espn_athlete_id) {
+            Some(entry) => entry.clone(),
+            None => {
+                golfers_skipped += 1;
+                continue;
+            }
+        };
+
+        if data.rounds.is_empty() {
+            golfers_skipped += 1;
+            continue;
+        }
+
+        // Upsert scores for this golfer
+        for round in &data.rounds {
+            for hole in &round.holes {
+                let score_to_par = hole.score - hole.par;
+                let fantasy_points = calculate_fantasy_points(score_to_par, is_amateur);
+                let id = new_id();
+
+                sqlx::query(
+                    "INSERT INTO hole_scores (id, tournament_id, golfer_id, day, hole, strokes, score_to_par, fantasy_points) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT (tournament_id, golfer_id, day, hole) \
+                     DO UPDATE SET strokes = excluded.strokes, score_to_par = excluded.score_to_par, fantasy_points = excluded.fantasy_points"
+                )
+                .bind(&id)
+                .bind(&tournament_id)
+                .bind(&golfer_id)
+                .bind(round.round_number)
+                .bind(hole.hole)
+                .bind(hole.score)
+                .bind(score_to_par)
+                .bind(fantasy_points)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+                total_processed += 1;
+            }
+        }
+        golfers_updated += 1;
+    }
+
+    Ok(Json(RefreshScoresResponse {
+        total_scores_processed: total_processed,
+        golfers_updated,
+        golfers_skipped,
+        errors,
     }))
 }

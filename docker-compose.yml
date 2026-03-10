@@ -5,12 +5,12 @@ services:
       dockerfile: Dockerfile
     container_name: feathers_and_fairways
     ports:
-      - "3000:3000"
+      - "41549:41549"
     environment:
       - DATABASE_URL=sqlite:/app/data/feathers_and_fairways.db
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changethistosomethingelse}
       - HOST=0.0.0.0
-      - PORT=3000
+      - PORT=${PORT}
       - RUST_LOG=feathers_and_fairways=info,tower_http=info
     volumes:
       - ./data:/app/data

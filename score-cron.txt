@@ -1,0 +1,6 @@
+# Refresh ESPN scores every 15 minutes during tournament hours (Thu-Sun, 8am-8pm)
+# Replace PASSWORD with your ADMIN_PASSWORD and TOURNAMENT_ID with the actual tournament UUID
+
+*/15 8-20 * * 4-7 curl -s -X POST \
+  -H "Authorization: Basic $(echo -n ':PASSWORD' | base64)" \
+  http://localhost:41549/api/admin/tournaments/TOURNAMENT_ID/scores/refresh

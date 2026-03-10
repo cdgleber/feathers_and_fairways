@@ -5,7 +5,7 @@ mod auth;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, post, put},
     middleware,
 };
 use sqlx::sqlite::{SqlitePoolOptions, SqliteConnectOptions};
@@ -57,10 +57,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build application router
     let app = Router::new()
-        // Public routes - Season routes
-        .route("/api/seasons", get(routes::list_seasons))
-        .route("/api/seasons/active", get(routes::get_active_season))
-
         // Public routes - Access key validation
         .route("/api/access-keys/validate", post(routes::validate_access_key))
 
@@ -69,24 +65,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/golfers/tournament/:tournament_id", get(routes::list_golfers_for_tournament))
 
         // Public routes - Team routes
-        .route("/api/teams", post(routes::create_team))
+        .route("/api/teams", get(routes::list_teams_by_tournament).post(routes::create_team))
         .route("/api/teams/update", post(routes::update_team))
-        .route("/api/teams/:season_id", get(routes::list_teams))
         .route("/api/teams/:team_id/golfers", get(routes::get_team_golfers))
 
         // Public routes - Tournament routes
-        .route("/api/tournaments/:season_id", get(routes::list_tournaments))
+        .route("/api/tournaments", get(routes::list_all_tournaments))
+        .route("/api/tournaments/completed", get(routes::list_completed_tournaments))
 
         // Public routes - Scores routes
         .route("/api/scores/tournament/:tournament_id", get(routes::get_tournament_scores))
 
         // Public routes - Leaderboard routes
-        .route("/api/leaderboard/:season_id", get(routes::get_season_leaderboard))
-        .route("/api/leaderboard/:season_id/detailed", get(routes::get_season_leaderboard_with_golfers))
         .route("/api/leaderboard/tournament/:tournament_id", get(routes::get_tournament_leaderboard))
-
-        // Public routes - Completed tournament history
-        .route("/api/tournaments/:season_id/completed", get(routes::get_completed_tournaments))
         .route("/api/leaderboard/tournament/:tournament_id/teams", get(routes::get_tournament_team_leaderboard))
         .route("/api/tournaments/:tournament_id/stats", get(routes::get_tournament_stats))
 
@@ -95,15 +86,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Protected admin routes (these will have middleware applied)
         .nest("/api/admin", Router::new()
-            .route("/seasons", post(routes::create_season))
-            .route("/access-keys", post(routes::create_access_keys))
+            .route("/access-keys", get(routes::list_access_keys).post(routes::create_access_keys))
             .route("/golfers", post(routes::create_golfer))
+            .route("/golfers/paste", post(routes::paste_golfers))
             .route("/tournaments", post(routes::create_tournament))
             .route("/scores", post(routes::add_hole_scores))
-            .route("/tournaments/:tournament_id/scores/upload", post(routes::upload_tournament_scores))
-            .route("/golfers/upload", post(routes::upload_golfers))
-            .route("/tournaments/:tournament_id/groups/upload", post(routes::upload_tournament_golfer_groups))
+            .route("/tournaments/:tournament_id/teams", get(routes::list_teams_for_tournament))
+            .route("/tournaments/:tournament_id/espn-field", post(routes::fetch_espn_field))
+            .route("/tournaments/:tournament_id/groups", post(routes::save_tournament_groups))
+            .route("/teams/:team_id/golfers", put(routes::admin_update_team_golfers))
             .route("/stats", get(routes::get_admin_stats))
+            .route("/tournaments/import/preview", post(routes::import_preview))
+            .route("/tournaments/import/espn-preview", post(routes::import_espn_preview))
+            .route("/tournaments/import/commit", post(routes::import_commit))
+            .route("/tournaments/:tournament_id/scores/refresh", post(routes::refresh_scores))
             .layer(middleware::from_fn(auth::admin_auth_middleware))
         )
 
@@ -113,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .fallback_service(ServeDir::new("dist"));
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "41549".to_string());
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
 
     tracing::info!("Starting server on {}", addr);

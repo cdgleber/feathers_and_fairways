@@ -208,6 +208,31 @@ pub async fn list_golfers_for_tournament(
     Ok(Json(golfers))
 }
 
+// Update golfer amateur status
+pub async fn update_golfer_amateur(
+    State(pool): State<SqlitePool>,
+    Path(golfer_id): Path<String>,
+    Json(payload): Json<UpdateAmateurRequest>,
+) -> Result<Json<Golfer>, (StatusCode, Json<ApiError>)> {
+    sqlx::query("UPDATE golfers SET is_amateur = ? WHERE id = ?")
+        .bind(payload.is_amateur)
+        .bind(&golfer_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?;
+
+    let golfer = sqlx::query_as::<_, Golfer>(
+        "SELECT id, name, win_probability_group, is_amateur, is_active, espn_id, created_at FROM golfers WHERE id = ?"
+    )
+    .bind(&golfer_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError::new(e.to_string()))))?
+    .ok_or((StatusCode::NOT_FOUND, Json(ApiError::new("Golfer not found"))))?;
+
+    Ok(Json(golfer))
+}
+
 // Paste golfers from a list of names
 pub async fn paste_golfers(
     State(pool): State<SqlitePool>,

@@ -499,6 +499,12 @@ pub struct RefreshScoresResponse {
     pub errors: Vec<String>,
 }
 
+// Update golfer amateur status
+#[derive(Debug, Deserialize)]
+pub struct UpdateAmateurRequest {
+    pub is_amateur: bool,
+}
+
 // Paste golfers from a list of names
 #[derive(Debug, Deserialize)]
 pub struct PasteGolfersRequest {

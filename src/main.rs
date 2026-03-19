@@ -88,6 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/api/admin", Router::new()
             .route("/access-keys", get(routes::list_access_keys).post(routes::create_access_keys))
             .route("/golfers", post(routes::create_golfer))
+            .route("/golfers/:golfer_id/amateur", put(routes::update_golfer_amateur))
             .route("/golfers/paste", post(routes::paste_golfers))
             .route("/tournaments", post(routes::create_tournament))
             .route("/scores", post(routes::add_hole_scores))

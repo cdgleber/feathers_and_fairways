@@ -110,6 +110,17 @@ class FantasyGolfApp {
             }
         });
 
+        // Amateur status dropdowns
+        document.getElementById('amateurTournamentSelect')?.addEventListener('change', (e) => {
+            if (e.target.value) {
+                this.loadAmateurGolfers(e.target.value);
+            } else {
+                const golferSelect = document.getElementById('amateurGolferSelect');
+                golferSelect.innerHTML = '<option value="">Select a golfer</option>';
+                golferSelect.disabled = true;
+            }
+        });
+
         // Team editor dropdowns
         document.getElementById('teamEditorTournament')?.addEventListener('change', (e) => {
             if (e.target.value) {
@@ -621,6 +632,7 @@ class FantasyGolfApp {
             const selects = [
                 { id: 'keyTournamentSelect', placeholder: 'Select a tournament' },
                 { id: 'fieldTournamentSelect', placeholder: 'Select a tournament' },
+                { id: 'amateurTournamentSelect', placeholder: 'Select a tournament' },
             ];
 
             selects.forEach(({ id, placeholder }) => {
@@ -2218,6 +2230,60 @@ class FantasyGolfApp {
             }
         } catch (error) {
             this.showToast('Error importing scores', 'error');
+            console.error(error);
+        } finally {
+            this.hideLoading();
+        }
+    }
+    async loadAmateurGolfers(tournamentId) {
+        try {
+            const response = await fetch(`${API_BASE}/golfers/tournament/${tournamentId}`);
+            if (response.ok) {
+                const golfers = await response.json();
+                const select = document.getElementById('amateurGolferSelect');
+                select.innerHTML = '<option value="">Select a golfer</option>' +
+                    golfers.map(g => `<option value="${g.id}">${g.name}${g.is_amateur ? ' (Amateur)' : ''}</option>`).join('');
+                select.disabled = false;
+                this.amateurGolfers = golfers;
+            }
+        } catch (error) {
+            console.error('Error loading golfers for amateur toggle:', error);
+        }
+    }
+
+    async toggleAmateur() {
+        const golferSelect = document.getElementById('amateurGolferSelect');
+        const golferId = golferSelect.value;
+        if (!golferId) {
+            this.showToast('Please select a golfer', 'error');
+            return;
+        }
+
+        const golfer = this.amateurGolfers?.find(g => g.id === golferId);
+        if (!golfer) return;
+
+        const newStatus = !golfer.is_amateur;
+        this.showLoading();
+        try {
+            const response = await this.makeAdminRequest(`${API_BASE}/admin/golfers/${golferId}/amateur`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_amateur: newStatus })
+            });
+
+            if (response.ok) {
+                this.showToast(`${golfer.name} marked as ${newStatus ? 'amateur' : 'professional'}`, 'success');
+                const tournamentId = document.getElementById('amateurTournamentSelect').value;
+                if (tournamentId) {
+                    await this.loadAmateurGolfers(tournamentId);
+                    golferSelect.value = golferId;
+                }
+            } else {
+                const result = await response.json();
+                this.showToast(result.message || 'Error updating amateur status', 'error');
+            }
+        } catch (error) {
+            this.showToast('Error updating amateur status', 'error');
             console.error(error);
         } finally {
             this.hideLoading();

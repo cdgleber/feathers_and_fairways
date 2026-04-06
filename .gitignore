@@ -35,3 +35,6 @@ Thumbs.db
 TODO.md
 next.txt
 
+backup/
+
+*.sh

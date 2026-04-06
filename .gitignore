@@ -34,7 +34,11 @@ Thumbs.db
 
 TODO.md
 next.txt
+score-cron.txt
 
 backup/
 
 *.sh
+
+api.md
+quickstart.md

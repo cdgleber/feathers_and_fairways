@@ -21,6 +21,7 @@ A fantasy golf league management application. Commissioners manage seasons and t
 - **Tournament Creation**: Set up tournaments throughout the season
 - **Score Entry**: Record hole-by-hole results via manual entry or bulk JSON upload
 - **Tournament Import**: Preview and import tournament data from a JSON file or directly from ESPN by tournament ID
+- **ESPN Field Import**: Fetch the tournament field from ESPN and auto-assign golfers to groups 1-9 using equal-count binning based on ESPN's field ordering (OWGR-based)
 - **Per-Tournament Groups**: Override default golfer groups on a per-tournament basis
 - **Team Editor**: View and edit team golfer selections from the admin panel
 - **Database Stats**: View database statistics from the admin panel

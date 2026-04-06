@@ -68,6 +68,7 @@ Protected (admin auth middleware via `/api/admin` nest): `/api/admin/seasons`, `
 - Admin login returns a JWT (60-min expiry); `ADMIN_PASSWORD` env var is required (no default fallback).
 - Bulk upload endpoints support JSON arrays for golfers, scores, and tournament golfer groups.
 - ESPN tournament import: backend fetches data from ESPN's core API (`sports.core.api.espn.com`), transforms it into the standard import format, and feeds it through the existing preview/commit flow. Uses `reqwest` with `tokio::sync::Semaphore(10)` for concurrency-limited parallel fetching.
+- ESPN field import (`fetch_espn_field`): auto-assigns golfers to groups 1-9 using equal-count binning (quantiles) based on ESPN's `order` field from competitor page items. Golfers are sorted by order ascending (best first), then divided evenly into 9 groups. The `order` field reflects ESPN's field ordering (typically OWGR-based pre-tournament). Falls back to `sortOrder` on individual competitor objects if present, then original page position.
 
 ## Additional Files
 

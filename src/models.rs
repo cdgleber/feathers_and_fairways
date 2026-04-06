@@ -402,9 +402,12 @@ pub struct EspnCompetitorPage {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct EspnCompetitorRef {
     #[serde(rename = "$ref")]
     pub href: String,
+    /// ESPN's field ordering (OWGR-based pre-tournament, leaderboard post-tournament)
+    pub order: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -662,8 +665,8 @@ mod espn_parsing_tests {
             "pageSize": 25,
             "pageCount": 7,
             "items": [
-                {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/4848?lang=en&region=us"},
-                {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/780?lang=en&region=us"}
+                {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/4848?lang=en&region=us", "order": 1},
+                {"$ref": "http://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/401811934/competitions/401811934/competitors/780?lang=en&region=us", "order": 2}
             ]
         }"#;
 
@@ -671,6 +674,18 @@ mod espn_parsing_tests {
         assert_eq!(page.page_count, 7);
         assert_eq!(page.items.len(), 2);
         assert!(page.items[0].href.contains("401811934"));
+        assert_eq!(page.items[0].order, Some(1));
+        assert_eq!(page.items[1].order, Some(2));
+
+        // order field is optional (some API responses omit it)
+        let json_no_order = r#"{
+            "pageCount": 1,
+            "items": [
+                {"$ref": "http://example.com/competitor/1"}
+            ]
+        }"#;
+        let page2: EspnCompetitorPage = serde_json::from_str(json_no_order).expect("should parse without order");
+        assert_eq!(page2.items[0].order, None);
     }
 
     /// The competitor object links to athlete and linescores via $ref.

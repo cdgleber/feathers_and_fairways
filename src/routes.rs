@@ -1006,12 +1006,15 @@ pub async fn get_tournament_team_leaderboard(
 
     // Batch-fetch all team golfers for this tournament
     let team_golfers = sqlx::query_as::<_, TeamGolferRow>(
-        "SELECT tg.team_id, g.id, g.name, g.win_probability_group, g.is_amateur \
+        "SELECT tg.team_id, g.id, g.name, \
+         COALESCE(tgg.win_probability_group, g.win_probability_group) as win_probability_group, \
+         g.is_amateur \
          FROM team_golfers tg \
          INNER JOIN golfers g ON tg.golfer_id = g.id \
          INNER JOIN teams t ON tg.team_id = t.id \
+         LEFT JOIN tournament_golfer_groups tgg ON tgg.golfer_id = g.id AND tgg.tournament_id = t.tournament_id \
          WHERE t.tournament_id = ? \
-         ORDER BY g.win_probability_group"
+         ORDER BY COALESCE(tgg.win_probability_group, g.win_probability_group)"
     )
     .bind(&tournament_id)
     .fetch_all(&pool)

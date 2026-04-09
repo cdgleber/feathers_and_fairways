@@ -15,12 +15,15 @@ fn new_id() -> String {
 }
 
 fn calculate_fantasy_points(score_to_par: i32, is_amateur: bool) -> i32 {
-    match score_to_par {
-        s if s <= -2 => 2,  // Eagle or better
-        -1 => 1,            // Birdie
-        0 => 0,             // Par
-        _ => if is_amateur { 0 } else { -1 },  // Bogey or worse (amateurs get 0)
-    }
+    let points = match score_to_par {
+        s if s <= -3 => 8,   // Better than eagle (albatross or better)
+        -2 => 5,             // Eagle
+        -1 => 2,             // Birdie
+        0 => 1,              // Par
+        1 => -1,             // Bogey
+        _ => -3,             // Double bogey or worse
+    };
+    if is_amateur && points < 0 { 0 } else { points }
 }
 
 // Access key routes

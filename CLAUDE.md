@@ -40,7 +40,7 @@ Ten sequential SQL migrations (`01` through `10`). Key design decisions:
 - UUIDs as TEXT primary keys (generated in Rust, not DB)
 - Booleans stored as INTEGER (0/1)
 - Dates stored as TEXT in ISO format
-- Fantasy points: eagle+ = +2, birdie = +1, par = 0, bogey+ = -1 (amateurs get 0 for bogey+) (calculated in Rust before INSERT)
+- Fantasy points: better than eagle = +8, eagle = +5, birdie = +2, par = +1, bogey = -1, double bogey+ = -3 (amateurs get 0 for negative scores) (calculated in Rust before INSERT)
 - Team golfer limit (max 9, one per group) enforced in application code
 - Golfers have an `is_amateur` flag (migration 10); amateurs cannot receive negative fantasy points
 - Only one active season and one active tournament per season at a time (enforced in route handlers)

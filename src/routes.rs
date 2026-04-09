@@ -616,8 +616,9 @@ pub async fn get_tournament_leaderboard(
             g.id as golfer_id, \
             COALESCE(SUM(hs.fantasy_points), 0) as total_points \
          FROM golfers g \
-         INNER JOIN team_golfers tg ON tg.golfer_id = g.id \
-         INNER JOIN teams t ON tg.team_id = t.id AND t.tournament_id = ? \
+         INNER JOIN (SELECT DISTINCT tg.golfer_id FROM team_golfers tg \
+            INNER JOIN teams t ON tg.team_id = t.id AND t.tournament_id = ?) dt \
+            ON g.id = dt.golfer_id \
          LEFT JOIN hole_scores hs ON g.id = hs.golfer_id AND hs.tournament_id = ? \
          GROUP BY g.id, g.name \
          ORDER BY total_points DESC"
